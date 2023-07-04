@@ -1,9 +1,7 @@
 # BC-proxy-using-machine-learning
 This project was made to predict Black Carbon concentration in Delhi. 
 The scripts were not written to be reused, but only for a personal use, which explains why there is not a proper documentation, and very few comments.  
-Iva is the main author of the LSTM.py script, Pau did a consequent part of the classes.py script, and I did the rest. Please, find below their respective Github profile:  
-
-https://github.com/pau-ferrer-cid  
+Iva is the main author of the LSTM.py script. Please, find below her Github profile:  
 
 https://github.com/BoksicIva  
 
@@ -13,3 +11,4 @@ The data is not published to respect privacy. They contain measures of Black Car
 * scores folder contains scores from RF and SVR cross validation
 * img folder contains images of seasons spliting, correlation matrix of the features, and error in LSTM. 
 * data folder is empty. It originally contained the data file. 
+* conclusions_oriented_report.pdf is the report with the results
