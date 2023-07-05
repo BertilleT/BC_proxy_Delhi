@@ -1,9 +1,6 @@
 # BC-proxy-using-machine-learning
 This project was made to predict Black Carbon concentration in Delhi. 
 The scripts were not written to be reused, but only for a personal use, which explains why there is not a proper documentation, and very few comments.  
-Iva is the main author of the LSTM.py script. Please, find below her Github profile:  
-
-https://github.com/BoksicIva  
 
 The data is not published to respect privacy. They contain measures of Black Carbon concentration on the year 2018 and 2019, with features BC, date, Hours, PM10, PM2.5, RH, NOX, Ozone.  
 
