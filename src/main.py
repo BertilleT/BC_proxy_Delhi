@@ -5,16 +5,16 @@ from predict_BC_class import predict_BC_lib
 ## --------------- DEFINING VARIABLES --------------- ##
 
 data_path = "../data/BC_Exposure_data_set_for_Delhi_2018-2019.xlsx"
-method = 'SVR' 
+method = 'NN' 
 #method = 'RF'
 #dictonnaries with the best hyper parameters already found during the training. 
 best_param = {}
 if method == 'SVR': 
-    best_param["whole dataset"] = [10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
-    best_param["winter"] = [100, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
-    best_param["pre_monsoon"] = [10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
-    best_param["summer"] = [10, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
-    best_param["post_monsoon"] = [10, 0.1, 0.1]#[10, 0.1, 0.01] WITH RH
+    best_param["whole dataset"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
+    best_param["winter"] = 'null' #[100, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
+    best_param["pre_monsoon"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
+    best_param["summer"] = 'null' #[10, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
+    best_param["post_monsoon"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.01] WITH RH
 elif method == 'RF':
     best_param["whole dataset"] = [500, 10, 5]
     best_param["winter"] = [10, 1, 3]
@@ -22,19 +22,24 @@ elif method == 'RF':
     best_param["summer"] = [500, 15, 3]
     best_param["post_monsoon"] = [500, 20, 3]
 elif method == 'NN':
-    best_param["whole dataset"] = [2, 0.001, 5, 32]
+    #IVA best_param["whole dataset"] = [2, 0.001, 5, 32]
+    best_param["whole dataset"] = [(100, 100, 50), 'relu', 'adam', 0.01, 'constant']
+    best_param["winter"] = 'null'
+    best_param["pre_monsoon"] = 'null'
+    best_param["summer"] = 'null'
+    best_param["post_monsoon"] = 'null'
 
-#scoring = 'neg_mean_squared_error'
-scoring = 'neg_mean_absolute_error' 
+scoring = 'neg_mean_squared_error'
+#scoring = 'neg_mean_absolute_error' 
 
 ## --------------- PROCESSING --------------- ##
 lib = predict_BC_lib()
-## Whole dataset 
+"""## Whole dataset 
 df = pd.read_excel(data_path)
 df = lib.remove_nan(df)
 df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
 metrics = train_test_ML(df, method, scoring, "whole dataset", best_param)
-print(metrics)
+print(metrics)"""
 
 ## Seasonal subset 
 #split df into seasons

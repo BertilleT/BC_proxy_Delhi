@@ -8,6 +8,8 @@ from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import svm
 import torch
+from sklearn.neural_network import MLPRegressor
+from sklearn.datasets import make_regression
 
 lib = predict_BC_lib()
 
@@ -23,22 +25,14 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     #store the number of features
     nb_col = len(df.columns)
     train, test = train_test_split(df, test_size=0.33, random_state=42)
-    if method == 'NN':
-        train, validation = train_test_split(train, test_size=0.19, random_state=42)
     #the index is usefull to recover temporality and draw plots, so let us store it. 
     train_index = train.index
-    if method == 'NN':
-        validation_index = validation.index
     test_index = test.index
 
     #standardize
     scaler = preprocessing.StandardScaler()
     scaler.fit(train)
     train_df = pd.DataFrame(scaler.transform(train), columns=train.columns, index=train_index)
-    if method == 'NN':
-        validation_df = pd.DataFrame(scaler.transform(validation), columns=validation.columns, index=validation_index)
-        X_validation = validation_df.drop("BC", axis = 1)
-        Y_validation = validation_df[["BC"]]
     test_df = pd.DataFrame(scaler.transform(test), columns=test.columns, index=test_index)
 
     #Training
@@ -46,11 +40,11 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     Y_train = train_df[["BC"]]
     et = time.time()
     if method == 'SVR':
-        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train,Y_train, scoring, best_parameters[season])
+        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train, Y_train, scoring, best_parameters[season])
     elif method == 'RF':
-        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_RF(X_train,Y_train, scoring, best_parameters[season])
+        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_RF(X_train, Y_train, scoring, best_parameters[season])
     elif method == 'NN':
-        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_NN(X_train,Y_train, X_validation, Y_validation, scoring, best_parameters[season])
+        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_NN(X_train, Y_train, scoring, best_parameters[season])
     st = time.time()
     elapsed_time = (et - st) / 60
     if (model, best_parameters, train_predicted_Y, error_train, error_validation) == (0, 0, 0, 0, 0):
@@ -76,11 +70,11 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     elif method == 'RF':
         model = RandomForestRegressor(n_estimators = best_parameters[0], max_features = best_parameters[1], max_depth = best_parameters[2])
         model.fit(X_test, np.ravel(Y_test))
-        test_predicted_Y = model.predict(X_test)    
+        test_predicted_Y = model.predict(X_test)   
     elif method == 'NN':
-        with torch.no_grad():
-            test_predicted_Y = model(torch.Tensor(np.array(X_test)))
-        test_predicted_Y = test_predicted_Y.detach().numpy()
+        model = MLPRegressor(hidden_layer_sizes = best_parameters[0], activation = best_parameters[1], solver = best_parameters[2], alpha = best_parameters[3], learning_rate = best_parameters[4])
+        model.fit(X_test, np.ravel(Y_test))
+        test_predicted_Y = model.predict(X_test)     
 
     unscaled_test_Y, unscaled_test_predicted_Y = lib.destandardize(Y_test, test_predicted_Y, scaler, nb_col)
     

@@ -11,9 +11,21 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.neural_network import MLPRegressor
+from sklearn.datasets import make_regression
+
+class Perceptron(torch.nn.Module):
+    def __init__(self, num_features, num_hidden):
+        super(Perceptron, self).__init__()
+        self.fc = nn.Linear(1,1)
+        self.relu = torch.nn.ReLU() # instead of Heaviside step fn
+    def forward(self, x):
+        output = self.fc(x)
+        output = self.relu(x) # instead of Heaviside step fn
+        return output
 
 class predict_BC_lib():
-    alpha = 0.8
+    alpha = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     def print_nan_per(self, df):
         nb_rows = len(df.index)
@@ -23,7 +35,7 @@ class predict_BC_lib():
 
     def remove_nan(self, df): 
         nb_rows_original = len(df.index)
-        columns_to_remove = ["WD", "WS", "Temp", "RF", "RH"]
+        columns_to_remove = ["WD", "WS", "Temp", "RF"]
         df = df.drop(columns_to_remove, axis = 1)
         #print("We removed the columns: " + str(columns_to_remove))
         df = df.dropna()
@@ -77,7 +89,7 @@ class predict_BC_lib():
         ax.set_title('Testing: true vs predicted values with ' + method + ' in ' + str(season))
         #plt.show()
         ax.legend()
-        fig.savefig('../img/' + method + '_without_RH/predictedANDtrue_'+ method +'_' + season + '.png')
+        fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
 
     ##plot scatter of true values against prediction 
     def trueVSpred_scatter_plot(self, Y_true, Y_prediction, method, season):
@@ -90,7 +102,7 @@ class predict_BC_lib():
         ax.set_ylabel('Predicted Values')
         ax.set_title('Testing: predicted values with ' + method + ' vs true values in ' + str(season))
         #plt.show()
-        fig.savefig('../img/' + method + '_without_RH/predictedVStrue_'+ method +'_' + season + '.png')
+        fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
 
     def split(self, df):
         winter_df = df[(df['date'].dt.month >= 12) | (df['date'].dt.month <= 2)]
@@ -175,9 +187,9 @@ class predict_BC_lib():
             gammas = [best_params[1]]
             epsilons = [best_params[2]]
         else: 
-            Cs = [1, 10, 100]
-            gammas = [0.001, 0.01, 0.1]
-            epsilons = [0.01, 0.1, 1]
+            Cs = [1, 5, 10, 50, 100]
+            gammas = [0.0001, 0.001, 0.01, 0.1, 1]
+            epsilons = [0.001, 0.01, 0.1, 1, 10]
         #kernels = ["rbf", "poly", "sigmoid"]
         param_grid = { 'C' : Cs, 'gamma': gammas, 'epsilon': epsilons}#, 'kernel': kernels}
         svr_estimator = svm.SVR()
@@ -202,25 +214,89 @@ class predict_BC_lib():
             data_predict_train = svr_estimator.predict(X)
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
-    def train_NN(self, X_train, Y_train, X_validation, Y_validation, scoring, best_params): 
+    def train_NN(self, X, Y, scoring, best_params): 
+        param_grid = {
+            'hidden_layer_sizes': [(50,), (100, 50), (100, 100, 50)],
+            'activation': ['relu'],#'logistic'
+            'solver': ['adam'], #'sgd', 
+            'alpha': [0.001],#0.0001, , 0.01
+            'learning_rate': ['constant', 'adaptive']
+        }
+        kfold = 10
         if best_params != 'null':
-            num_layers = best_params[0]
-            learning_rate = best_params[1]
-            nb_epochs = best_params[2]
-            hidden_size = best_params[3]
+            nb_neurons = [best_params[0]]
+            activation = [best_params[1]]
+            optimizer = [best_params[2]]
+            alpha = [best_params[3]]
+            learning_rate = [best_params[4]]
         else: 
-            num_layers = [1, 2, 3, 4]
-            learning_rate = [0.001, 0.01, 0.1]
+            """nb_neurons = [(50,), (100, 50), (100, 100, 50)]
+            activation = ['logistic', 'relu']
+            optimizer = ['sgd', 'adam']
+            alpha = [0.0001, 0.001, 0.01]
+            learning_rate = ['constant', 'adaptive']"""
+            nb_neurons = [(50,), (100, 50), (100, 100, 50)]
+            activation = ['relu']
+            optimizer = ['adam']
+            alpha = [0.0001, 0.001, 0.01]
+            learning_rate = ['constant', 'adaptive']
+            
+        param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha, 'learning_rate': learning_rate}
+        mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
+        search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, verbose=10)
+        search.fit(X, np.ravel(Y))
+        cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)        
+        if len(cv_scores_df.index) == 0:
+            print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
+            return 0, 0, 0, 0, 0
+        else: 
+            best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
+            error_train = best["mean_train_score"]
+            error_validation = best["mean_test_score"]
+
+            best_hidden_layer_sizes = best['param_hidden_layer_sizes']
+            best_activation = best['param_activation']
+            best_solver = best['param_solver']
+            best_alpha = best['param_alpha']
+            best_learning_rate = best['param_learning_rate']
+
+            mlp_estimator = MLPRegressor(hidden_layer_sizes = best_hidden_layer_sizes, activation = best_activation, solver = best_solver, alpha = best_alpha, learning_rate = best_learning_rate)
+            mlp_estimator.fit(X, np.ravel(Y))
+            data_predict_train = mlp_estimator.predict(X)
+            return mlp_estimator, [best_hidden_layer_sizes, best_activation, best_solver, best_alpha, best_learning_rate], data_predict_train, -error_train, -error_validation
+        """if best_params != 'null':
+        ok  learning_rate = best_params[0]
+        ok  nb_layers = best_params[1]
+        ok  nb_neurons = best_params[2]
+        ok  activation_fct = best_params[3]
+            regularization = best_params[4]
+        ok  nb_epochs = best_params[5]
+        ok  batch_size = best_params[6] 
+        ok  optimizer = best_params[7]
+        else: 
+            num_layers = [0.001, 0.01, 0.1]
+            learning_rate = []
             nb_epochs = [10, 30, 50, 100]
             hidden_size = []
-        train = data_utils.TensorDataset(torch.Tensor(np.array(X_train)), torch.Tensor(np.array(Y_train)))
-        train_loader = data_utils.DataLoader(train, batch_size=10, shuffle=True)
-        torch.manual_seed(42)
+        
+        
+#-----------------------------------------------------------------------------------------------------------------
 
-        mlp = nn.Sequential(nn.Linear(X_train.shape[1], hidden_size), nn.ReLU(), nn.Linear(hidden_size, 1))
+        train = data_utils.TensorDataset(torch.Tensor(np.array(X)), torch.Tensor(np.array(Y)))
+        train_loader = data_utils.DataLoader(train, batch_size=batch_size, shuffle=True)
+        P = len(X_train.columns)
+        torch.manual_seed(42)
+        mlp = MLP(P, nb_layers, nb_neurons, activation_fct)
 
         loss_function = nn.MSELoss(size_average=False)
-        SGD_optimizer = torch.optim.Adam(mlp.parameters(), lr=learning_rate)
+        if optimizer == 'Adam':
+            optimizer = torch.optim.Adam(mlp.parameters(), lr=learning_rate) 
+        elif optimizer == 'SGD':
+            optimizer = torch.optim.SGD(mlp.parameters(), lr=learning_rate) 
+
+        for epoch in range(nb_epochs): 
+
         for epoch in range(nb_epochs): 
             print(f'Starting epoch {epoch+1}')
             current_loss = 0.0
@@ -237,14 +313,15 @@ class predict_BC_lib():
             train_predicted_Y = mlp(torch.Tensor(np.array(X_train)))
             valid_predicted_Y = mlp(torch.Tensor(np.array(X_validation)))
 
+#-----------------------------------------------------------------------------------------------------------------
+
         train_predicted_Y_np = train_predicted_Y.detach().numpy()
         valid_predicted_Y_np = valid_predicted_Y.detach().numpy()
-        
         if scoring == 'neg_mean_squared_error':
             error_train = np.sqrt(mean_squared_error(Y_train, train_predicted_Y))
             error_validation = np.sqrt(mean_squared_error(Y_validation, valid_predicted_Y))
         elif scoring == 'neg_mean_absolute_error':
             error_train = np.sqrt(mean_absolute_error(Y_train, train_predicted_Y))
-            error_validation = mean_absolute_error(Y_validation, valid_predicted_Y)
+            error_validation = mean_absolute_error(Y_validation, valid_predicted_Y)"""
 
         return  mlp, best_params, train_predicted_Y_np, error_train, error_validation
