@@ -24,16 +24,17 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     df = df.drop(["date","Hrs.", "datetime"], axis = 1)
     #store the number of features
     nb_col = len(df.columns)
-    train, test = train_test_split(df, test_size=0.33, random_state=42)
+    train_df, test_df = train_test_split(df, test_size=0.25, random_state=42)
     #the index is usefull to recover temporality and draw plots, so let us store it. 
-    train_index = train.index
-    test_index = test.index
+    train_index = train_df.index
+    test_index = test_df.index
 
     #standardize
     scaler = preprocessing.StandardScaler()
-    scaler.fit(train)
-    train_df = pd.DataFrame(scaler.transform(train), columns=train.columns, index=train_index)
-    test_df = pd.DataFrame(scaler.transform(test), columns=test.columns, index=test_index)
+    scaler.fit(train_df)
+    #train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
+    test_df = pd.DataFrame(scaler.transform(test_df), columns=test_df.columns, index=test_index)
+
 
     #Training
     X_train = train_df.drop("BC", axis = 1)
@@ -78,12 +79,15 @@ def train_test_ML(df, method, scoring, season, best_parameters):
 
     unscaled_test_Y, unscaled_test_predicted_Y = lib.destandardize(Y_test, test_predicted_Y, scaler, nb_col)
     
-    if scoring == 'neg_mean_squared_error':
+    if scoring == 'neg_root_mean_squared_error':
         error_test = np.sqrt(mean_squared_error(Y_test, test_predicted_Y))
         unscaled_error_test = np.sqrt(mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y))
-    elif scoring == 'neg_mean_absolute_error':
+    elif scoring == 'mean_absolute_error':
         error_test = mean_absolute_error(Y_test, test_predicted_Y)
         unscaled_error_test = mean_absolute_error(unscaled_test_Y, unscaled_test_predicted_Y)
+    elif scoring == 'neg_mean_squared_error':
+        error_test = mean_squared_error(Y_test, test_predicted_Y)
+        unscaled_error_test = mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y)
     
     R2_test = r2_score(Y_test, test_predicted_Y)
     lib.trueANDpred_time_plot(unscaled_test_Y, unscaled_test_predicted_Y, datetime_df, method, season)
