@@ -6,23 +6,8 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn import svm
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-import torch.utils.data as data_utils
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
-
-class Perceptron(torch.nn.Module):
-    def __init__(self, num_features, num_hidden):
-        super(Perceptron, self).__init__()
-        self.fc = nn.Linear(1,1)
-        self.relu = torch.nn.ReLU() # instead of Heaviside step fn
-    def forward(self, x):
-        output = self.fc(x)
-        output = self.relu(x) # instead of Heaviside step fn
-        return output
 
 class predict_BC_lib():
     alpha = 0.06
@@ -64,6 +49,18 @@ class predict_BC_lib():
         #keep index is important. The predictions do not have them but the true values yes. 
         return Y_true_destd, Y_prediction_destd
 
+    def split(self, df):
+        winter_df = df[(df['date'].dt.month >= 12) | (df['date'].dt.month <= 2)]
+        pre_monsoon_df = df[(df['date'].dt.month >= 3) & (df['date'].dt.month <= 5)]
+        summer_df = df[(df['date'].dt.month >= 6) & (df['date'].dt.month <= 8)]
+        post_monsoon_df = df[(df['date'].dt.month >= 9) & (df['date'].dt.month <= 10)]
+        return winter_df, pre_monsoon_df, summer_df, post_monsoon_df
+
+    def filter_df(self, start_date, end_date, df):
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+        filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
+        return filtered_df
     ##plot true values and prediction according to time
     def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season):
         #merge datetime_df and unscaled_test_Y based on the index. 
@@ -104,19 +101,6 @@ class predict_BC_lib():
         #plt.show()
         fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
 
-    def split(self, df):
-        winter_df = df[(df['date'].dt.month >= 12) | (df['date'].dt.month <= 2)]
-        pre_monsoon_df = df[(df['date'].dt.month >= 3) & (df['date'].dt.month <= 5)]
-        summer_df = df[(df['date'].dt.month >= 6) & (df['date'].dt.month <= 8)]
-        post_monsoon_df = df[(df['date'].dt.month >= 9) & (df['date'].dt.month <= 10)]
-        return winter_df, pre_monsoon_df, summer_df, post_monsoon_df
-
-    def filter_df(self, start_date, end_date, df):
-        start_date = pd.to_datetime(start_date)
-        end_date = pd.to_datetime(end_date)
-        filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
-        return filtered_df
-
     def year_by_year_plot(self, df, year, ax):
         one_year_df = df[(df['datetime'].dt.year == year)]
         one_year_df.set_index('datetime', inplace=True)
@@ -133,7 +117,7 @@ class predict_BC_lib():
         one_year_df = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
         one_year_df.set_index('datetime', inplace=True)
         ax.scatter(one_year_df.index, one_year_df["BC"], marker='.')
-        """ax.set_xlim([datetime.date(end_year-1, 12, 1), datetime.date(end_year, end_month, 30)])
+        ax.set_xlim([datetime.date(end_year-1, 12, 1), datetime.date(end_year, end_month, 30)])
         ax.axvline(pd.to_datetime('2018-12-01'), color='r', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2018-03-01'), color='g', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2018-06-01'), color='purple', linestyle='--', lw=2)
@@ -143,10 +127,17 @@ class predict_BC_lib():
         ax.axvline(pd.to_datetime('2019-12-01'), color='r', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2019-03-01'), color='g', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2019-06-01'), color='purple', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2019-09-01'), color='b', linestyle='--', lw=2)"""
+        ax.axvline(pd.to_datetime('2019-09-01'), color='b', linestyle='--', lw=2)
         ax.set_xlabel('Time')
         ax.set_ylabel('BlackCarbon in µg/m3')
         ax.set_title(f'{start_date:%b %Y} - {end_date:%b %Y}')
+
+    def plot_season_split(self, df):
+        fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 12))
+        one_year_plot(df, 2018, 1, 2018, 11, ax1)
+        one_year_plot(df, 2018, 12, 2019, 11, ax2)
+        plt.tight_layout()
+        plt.show()
 
     def train_RF(self, X, Y, scoring, best_params):        
         kfold = 10
@@ -265,63 +256,4 @@ class predict_BC_lib():
             mlp_estimator.fit(X, np.ravel(Y))
             data_predict_train = mlp_estimator.predict(X)
             return mlp_estimator, [best_hidden_layer_sizes, best_activation, best_solver, best_alpha, best_learning_rate], data_predict_train, -error_train, -error_validation
-        """if best_params != 'null':
-        ok  learning_rate = best_params[0]
-        ok  nb_layers = best_params[1]
-        ok  nb_neurons = best_params[2]
-        ok  activation_fct = best_params[3]
-            regularization = best_params[4]
-        ok  nb_epochs = best_params[5]
-        ok  batch_size = best_params[6] 
-        ok  optimizer = best_params[7]
-        else: 
-            num_layers = [0.001, 0.01, 0.1]
-            learning_rate = []
-            nb_epochs = [10, 30, 50, 100]
-            hidden_size = []
-        
-        
-#-----------------------------------------------------------------------------------------------------------------
-
-        train = data_utils.TensorDataset(torch.Tensor(np.array(X)), torch.Tensor(np.array(Y)))
-        train_loader = data_utils.DataLoader(train, batch_size=batch_size, shuffle=True)
-        P = len(X_train.columns)
-        torch.manual_seed(42)
-        mlp = MLP(P, nb_layers, nb_neurons, activation_fct)
-
-        loss_function = nn.MSELoss(size_average=False)
-        if optimizer == 'Adam':
-            optimizer = torch.optim.Adam(mlp.parameters(), lr=learning_rate) 
-        elif optimizer == 'SGD':
-            optimizer = torch.optim.SGD(mlp.parameters(), lr=learning_rate) 
-
-        for epoch in range(nb_epochs): 
-
-        for epoch in range(nb_epochs): 
-            print(f'Starting epoch {epoch+1}')
-            current_loss = 0.0
-            for i, data in enumerate(train_loader, 0):
-                inputs, targets = data
-                inputs, targets = inputs.float(), targets.float()
-                targets = targets.reshape((targets.shape[0], 1))
-                SGD_optimizer.zero_grad()
-                outputs = mlp(inputs)
-                loss = loss_function(outputs, targets)
-                loss.backward()
-                SGD_optimizer.step()        
-        with torch.no_grad():
-            train_predicted_Y = mlp(torch.Tensor(np.array(X_train)))
-            valid_predicted_Y = mlp(torch.Tensor(np.array(X_validation)))
-
-#-----------------------------------------------------------------------------------------------------------------
-
-        train_predicted_Y_np = train_predicted_Y.detach().numpy()
-        valid_predicted_Y_np = valid_predicted_Y.detach().numpy()
-        if scoring == 'neg_mean_squared_error':
-            error_train = np.sqrt(mean_squared_error(Y_train, train_predicted_Y))
-            error_validation = np.sqrt(mean_squared_error(Y_validation, valid_predicted_Y))
-        elif scoring == 'neg_mean_absolute_error':
-            error_train = np.sqrt(mean_absolute_error(Y_train, train_predicted_Y))
-            error_validation = mean_absolute_error(Y_validation, valid_predicted_Y)"""
-
         return  mlp, best_params, train_predicted_Y_np, error_train, error_validation

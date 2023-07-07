@@ -1,2 +1,0 @@
-,param_C,param_epsilon,param_gamma,params,mean_train_score,mean_test_score,keep
-0,10,0.01,0.1,"{'C': 10, 'epsilon': 0.01, 'gamma': 0.1}",-0.21868660498306297,-0.2436118073664005,1

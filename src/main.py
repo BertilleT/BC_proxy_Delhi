@@ -34,12 +34,12 @@ scoring = 'neg_mean_squared_error'
 
 ## --------------- PROCESSING --------------- ##
 lib = predict_BC_lib()
-"""## Whole dataset 
+## Whole dataset 
 df = pd.read_excel(data_path)
 df = lib.remove_nan(df)
 df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
 metrics = train_test_ML(df, method, scoring, "whole dataset", best_param)
-print(metrics)"""
+print(metrics)
 
 ## Seasonal subset 
 #split df into seasons
