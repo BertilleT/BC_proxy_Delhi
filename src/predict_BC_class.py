@@ -30,6 +30,27 @@ class predict_BC_lib():
         print("The df under study contains now " + str(len(df.index)) + " rows. ")
         return df 
 
+    def remove_nan_impute_RH(self, df, rh): 
+        nb_rows_original = len(df.index)
+        columns_to_remove = ["WD", "WS", "Temp", "RF"]
+        df = df.drop(columns_to_remove, axis = 1)
+        #print("We removed the columns: " + str(columns_to_remove))
+        nb_rows_without_nan = len(df.index)
+        per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
+        print("We dropped: "+str(round(per_dropped))+"% of the original df.")
+        print("The df under study contains now " + str(len(df.index)) + " rows. ")
+        rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
+        rh['date'] = rh['From Date'].dt.date
+        rh = rh.drop(['From Date'], axis = 1)
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+        rh = rh.rename(columns={'RH': 'RH_new'})
+        print(df.dtypes())
+        df = df.merge(rh, on='date') ###############################work HERE 
+        print(df)
+        #df[BC] = df.apply(lambda x: )
+        #df = df.dropna()
+        return df 
+
     ##destandardize the prediction
     def destandardize(self, Y_true_std, Y_prediction_std, scaler, nb_col):
         #std stands for standardized

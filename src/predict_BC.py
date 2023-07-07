@@ -78,7 +78,7 @@ def train_test_ML(df, method, scoring, season, best_parameters):
 
     unscaled_test_Y, unscaled_test_predicted_Y = lib.destandardize(Y_test, test_predicted_Y, scaler, nb_col)
     
-    if scoring == 'neg_mean_squared_error':
+    if scoring == 'neg_root_mean_squared_error':
         error_test = np.sqrt(mean_squared_error(Y_test, test_predicted_Y))
         unscaled_error_test = np.sqrt(mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y))
     elif scoring == 'neg_mean_absolute_error':
