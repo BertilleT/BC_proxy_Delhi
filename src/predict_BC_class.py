@@ -155,16 +155,23 @@ class predict_BC_lib():
             max_features = [1, 3, 10]
             max_depth = [5, 10]
 
-        param_grid = { 'model__n_estimators' : n_estimators, 'model__max_features': max_features, 'model__max_depth': max_depth}
+        param_grid = {'model__n_estimators' : n_estimators, 'model__max_features': max_features, 'model__max_depth': max_depth}
 
         scaler = preprocessing.StandardScaler()
         rf_estimator = RandomForestRegressor()
         pipe = Pipeline([('scaler',scaler),('model',rf_estimator)])
         
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, verbose = 10, n_jobs=2)
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = True, return_train_score=True, verbose = 10, n_jobs=2)
         search.fit(X, np.ravel(Y))
+        search.fit_transform(X, np.ravel(Y))
 
+        #print("Best parameter (CV score=%0.3f):" % search.best_score_)
+        #print(search.best_params_)
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
+        # Standardize mean_train_score and mean_test_score
+        print(cv_scores_df[["mean_train_score", "mean_test_score"]])
+
+        
         pd.set_option('display.max_columns', None)
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1) 
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]    
@@ -204,13 +211,6 @@ class predict_BC_lib():
 
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
-
-        # Standardize mean_train_score and mean_test_score
-        scaled_train_scores = scaler.fit_transform(cv_scores_df['mean_train_score'].values.reshape(-1, 1))
-        scaled_test_scores = scaler.transform(cv_scores_df['mean_test_score'].values.reshape(-1, 1))
-
-        cv_scores_df['mean_train_score'] = scaled_train_scores
-        cv_scores_df['mean_test_score'] = scaled_test_scores
 
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]
@@ -254,8 +254,11 @@ class predict_BC_lib():
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
         search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
         search.fit(X, np.ravel(Y))
+        print("Best parameter (CV score=%0.3f):" % search.best_score_)
+        print(search.best_params_)
         warnings.resetwarnings()
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
+
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)     
         print(cv_scores_df[["mean_train_score", "mean_test_score", "keep"]])
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]   

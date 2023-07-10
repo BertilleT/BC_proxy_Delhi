@@ -5,7 +5,7 @@ from predict_BC_class import predict_BC_lib
 ## --------------- DEFINING VARIABLES --------------- ##
 
 data_path = "../data/BC_Exposure_data_set_for_Delhi_2018-2019.xlsx"
-method = 'SVR' 
+method = 'RF' 
 #dictonnaries with the best hyper parameters already found during the training. 
 best_param = {}
 if method == 'SVR': 
