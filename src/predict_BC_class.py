@@ -8,6 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
+import warnings
 
 class predict_BC_lib():
     alpha = 0.06
@@ -28,7 +29,29 @@ class predict_BC_lib():
         per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
         print("We dropped: "+str(round(per_dropped))+"% of the original df.")
         print("The df under study contains now " + str(len(df.index)) + " rows. ")
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
         return df 
+
+    def plot_RH(self, df, rh):
+        print(df)
+        print(rh)
+        rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
+        rh['date'] = rh['From Date'].dt.date
+        rh['date'] = pd.to_datetime(rh['date'], format='%Y-%m-%d')
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+        rh = rh.rename(columns={'RH': 'RH_new'})
+        df = df.merge(rh, on='date') 
+        print(df.dtypes)
+        df['RH_new'] = df['RH_new'].replace('None', np.nan).astype(float)
+        fig, ax = plt.subplots()
+
+        ax.plot(df['date'], df['RH'], label='RH')
+        ax.plot(df['date'], df['RH_new'], label='RH_new')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('RH')
+        ax.legend()
+
+        plt.show()
 
     def remove_nan_impute_RH(self, df, rh): 
         nb_rows_original = len(df.index)
@@ -39,16 +62,18 @@ class predict_BC_lib():
         per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
         print("We dropped: "+str(round(per_dropped))+"% of the original df.")
         print("The df under study contains now " + str(len(df.index)) + " rows. ")
+
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
         rh['date'] = rh['From Date'].dt.date
+        rh['date'] = pd.to_datetime(rh['date'], format='%Y-%m-%d')
         rh = rh.drop(['From Date'], axis = 1)
         df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
         rh = rh.rename(columns={'RH': 'RH_new'})
-        print(df.dtypes())
-        df = df.merge(rh, on='date') ###############################work HERE 
-        print(df)
-        #df[BC] = df.apply(lambda x: )
-        #df = df.dropna()
+        df = df.merge(rh, on='date') 
+        df['RH'] = df.apply(lambda x: x.RH_new if np.isnan(x.RH) else x.RH, axis = 1)
+        df['RH'] = pd.to_numeric(df['RH'], errors='coerce')
+        df = df.drop('RH_new', axis = 1)
+        df = df.dropna()
         return df 
 
     ##destandardize the prediction
@@ -82,6 +107,7 @@ class predict_BC_lib():
         end_date = pd.to_datetime(end_date)
         filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
         return filtered_df
+
     ##plot true values and prediction according to time
     def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season):
         #merge datetime_df and unscaled_test_Y based on the index. 
@@ -255,7 +281,8 @@ class predict_BC_lib():
             
         param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha, 'learning_rate': learning_rate}
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
-        search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, verbose=10)
+        warnings.filterwarnings("ignore")
+        search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)        

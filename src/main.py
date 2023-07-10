@@ -7,7 +7,6 @@ from predict_BC_class import predict_BC_lib
 data_path = "../data/BC_Exposure_data_set_for_Delhi_2018-2019.xlsx"
 RH_path = '../data/Relative humidity data_Delhi 2018-2019.csv'
 method = 'NN' 
-#method = 'RF'
 #dictonnaries with the best hyper parameters already found during the training. 
 best_param = {}
 if method == 'SVR': 
@@ -24,11 +23,11 @@ elif method == 'RF':
     best_param["post_monsoon"] = [500, 20, 3]
 elif method == 'NN':
     #IVA best_param["whole dataset"] = [2, 0.001, 5, 32]
-    best_param["whole dataset"] = [(100, 100, 50), 'relu', 'adam', 0.01, 'constant']
-    best_param["winter"] = 'null'
-    best_param["pre_monsoon"] = 'null'
-    best_param["summer"] = 'null'
-    best_param["post_monsoon"] = 'null'
+    best_param["whole dataset"] = [(100, 100, 50), 'relu', 'adam', 0.0001, 'constant']#[(100, 100, 50), 'relu', 'adam', 0.01, 'constant']
+    best_param["winter"] = [(100, 50), 'relu', 'adam', 0.001, 'constant']
+    best_param["pre_monsoon"] = [(100, 50), 'relu', 'adam', 0.0001, 'constant']
+    best_param["summer"] = [(50,), 'relu', 'adam', 0.001, 'constant']
+    best_param["post_monsoon"] = [(100, 100, 50), 'relu', 'adam', 0.0001, 'constant']
 
 scoring = 'neg_root_mean_squared_error'
 #scoring = 'neg_mean_absolute_error' 
@@ -38,11 +37,11 @@ lib = predict_BC_lib()
 ## Whole dataset 
 df = pd.read_excel(data_path)
 rh = pd.read_csv(RH_path)
-#df = lib.remove_nan(df)
-df = lib.remove_nan_impute_RH(df, rh)
+#lib.plot_RH(df, rh)
+df = lib.remove_nan(df)
+#df = lib.remove_nan_impute_RH(df, rh)
 #concatenate with new RH values
 
-"""df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
 metrics = train_test_ML(df, method, scoring, "whole dataset", best_param)
 print(metrics)
 
@@ -59,4 +58,4 @@ for season, season_df in seasons_dict.items():
     df = season_df
     df = lib.remove_nan(df)
     metrics = train_test_ML(df, method, scoring, season, best_param)
-    print(metrics)"""
+    print(metrics)
