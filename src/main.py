@@ -7,6 +7,9 @@ from predict_BC_class import predict_BC_lib
 data_path = "../data/BC_Exposure_data_set_for_Delhi_2018-2019.xlsx"
 RH_path = '../data/Relative humidity data_Delhi 2018-2019.csv'
 method = 'NN' 
+RH_included = True
+RH_imputed = True
+
 #dictonnaries with the best hyper parameters already found during the training. 
 best_param = {}
 if method == 'SVR': 
@@ -32,30 +35,40 @@ elif method == 'NN':
 scoring = 'neg_root_mean_squared_error'
 #scoring = 'neg_mean_absolute_error' 
 
+
 ## --------------- PROCESSING --------------- ##
+
 lib = predict_BC_lib()
-## whole_dataset 
+
+## Whole_dataset 
+
 df = pd.read_excel(data_path)
-rh = pd.read_csv(RH_path)
-#lib.plot_RH(df, rh)
-df = lib.remove_nan(df)
-#df = lib.remove_nan_impute_RH(df, rh)
-#concatenate with new RH values
+if RH_imputed == True:
+    rh = pd.read_csv(RH_path)
+    df = lib.impute_RH(df, rh)
+
+df = lib.remove_nan_columns(df, RH_included)
+df = lib.remove_nan_rows(df)
 
 metrics = train_test_ML(df, method, scoring, "whole dataset", best_param)
 print(metrics)
 
 ## Seasonal subset 
+
 #split df into seasons
 df = pd.read_excel(data_path)
+if RH_imputed == True:
+    rh = pd.read_csv(RH_path)
+    df = lib.impute_RH(df, rh)
 df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
 winter_df, pre_monsoon_df, summer_df, post_monsoon_df = lib.split(df)
 seasons_dict = {"winter": winter_df, "pre_monsoon": pre_monsoon_df, "summer": summer_df, "post_monsoon": post_monsoon_df}
-#seasons_dict = {"winter": winter_df, "summer": summer_df}
+
 for season, season_df in seasons_dict.items(): 
     print("--------------------------------------------------------------------------------------------------------------------------------------")
     print("Season under study: ", season)
     df = season_df
-    df = lib.remove_nan(df)
+    df = lib.remove_nan_columns(df, RH_included)
+    df = lib.remove_nan_rows(df)
     metrics = train_test_ML(df, method, scoring, season, best_param)
     print(metrics)

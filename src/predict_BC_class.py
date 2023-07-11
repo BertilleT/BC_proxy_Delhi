@@ -16,56 +16,14 @@ class predict_BC_lib():
     #per is the percentage of difference between training and validation scores we are willing to accept
     per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
+    
     def print_nan_per(self, df):
         nb_rows = len(df.index)
         for col in df.columns:
             per_missing = (df[col].isna().sum())*100/nb_rows
             print(str(col) + '  :  '+ str(round(per_missing))+' % of missing values')
-
-    def remove_nan(self, df): 
-        nb_rows_original = len(df.index)
-        columns_to_remove = ["WD", "WS", "Temp", "RF"]
-        df = df.drop(columns_to_remove, axis = 1)
-        #print("We removed the columns: " + str(columns_to_remove))
-        df = df.dropna()
-        nb_rows_without_nan = len(df.index)
-        per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
-        print("We dropped: "+str(round(per_dropped))+"% of the original df.")
-        print("The df under study contains now " + str(len(df.index)) + " rows. ")
-        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-        return df 
-
-    def plot_RH(self, df, rh):
-        print(df)
-        print(rh)
-        rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
-        rh['date'] = rh['From Date'].dt.date
-        rh['date'] = pd.to_datetime(rh['date'], format='%Y-%m-%d')
-        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
-        rh = rh.rename(columns={'RH': 'RH_new'})
-        df = df.merge(rh, on='date') 
-        print(df.dtypes)
-        df['RH_new'] = df['RH_new'].replace('None', np.nan).astype(float)
-        fig, ax = plt.subplots()
-
-        ax.plot(df['date'], df['RH'], label='RH')
-        ax.plot(df['date'], df['RH_new'], label='RH_new')
-        ax.set_xlabel('Time')
-        ax.set_ylabel('RH')
-        ax.legend()
-
-        plt.show()
-
-    def remove_nan_impute_RH(self, df, rh): 
-        nb_rows_original = len(df.index)
-        columns_to_remove = ["WD", "WS", "Temp", "RF"]
-        df = df.drop(columns_to_remove, axis = 1)
-        #print("We removed the columns: " + str(columns_to_remove))
-        nb_rows_without_nan = len(df.index)
-        per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
-        print("We dropped: "+str(round(per_dropped))+"% of the original df.")
-        print("The df under study contains now " + str(len(df.index)) + " rows. ")
-
+    
+    def impute_RH(self, df, rh):
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
         rh['date'] = rh['From Date'].dt.date
         rh['date'] = pd.to_datetime(rh['date'], format='%Y-%m-%d')
@@ -76,7 +34,26 @@ class predict_BC_lib():
         df['RH'] = df.apply(lambda x: x.RH_new if np.isnan(x.RH) else x.RH, axis = 1)
         df['RH'] = pd.to_numeric(df['RH'], errors='coerce')
         df = df.drop('RH_new', axis = 1)
+        return df
+
+    def remove_nan_columns(self, df, RH_included): 
+        #1 Remove columns
+        columns_to_remove = ["WD", "WS", "Temp", "RF"]
+        if RH_included == False: 
+            columns_to_remove.append("RH")
+        df = df.drop(columns_to_remove, axis = 1)
+        #print("We removed the columns: " + str(columns_to_remove))
+        return df
+
+    def remove_nan_rows(self, df): 
+        #2 Drop null rows
+        nb_rows_original = len(df.index)
         df = df.dropna()
+        nb_rows_without_nan = len(df.index)
+        per_dropped = ((nb_rows_original - nb_rows_without_nan)*100)/nb_rows_original
+        print("We dropped: "+str(round(per_dropped))+"% of the original df.")
+        print("The df under study contains now " + str(len(df.index)) + " rows. ")
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
         return df 
 
     ##destandardize the prediction
@@ -110,6 +87,24 @@ class predict_BC_lib():
         end_date = pd.to_datetime(end_date)
         filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
         return filtered_df
+        
+    def plot_RH(self, df, rh):
+        rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
+        rh['date'] = rh['From Date'].dt.date
+        rh['date'] = pd.to_datetime(rh['date'], format='%Y-%m-%d')
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+        rh = rh.rename(columns={'RH': 'RH_new'})
+        df = df.merge(rh, on='date') 
+        df['RH_new'] = df['RH_new'].replace('None', np.nan).astype(float)
+        fig, ax = plt.subplots()
+
+        ax.plot(df['date'], df['RH'], label='RH')
+        ax.plot(df['date'], df['RH_new'], label='RH_new')
+        ax.set_xlabel('Time')
+        ax.set_ylabel('RH')
+        ax.legend()
+
+        plt.show()
 
     ##plot true values and prediction according to time
     def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season):
@@ -192,6 +187,7 @@ class predict_BC_lib():
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
+
         if best_params != 'null':
             n_estimators = [best_params[0]]
             max_features = [best_params[1]]
@@ -232,7 +228,10 @@ class predict_BC_lib():
             return rf_estimator, [best_n, best_features, best_depth], data_predict_train, -error_train, -error_validation
 
     def train_SVR(self, X, Y, scoring, best_params):
-        kfold = 2
+        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = alpha.item()
+        kfold = 10
+
         if best_params != 'null':
             Cs = [best_params[0]]
             gammas = [best_params[1]]
@@ -242,14 +241,13 @@ class predict_BC_lib():
             gammas = [0.0001, 0.001, 0.01, 0.1, 1]
             epsilons = [0.001, 0.01, 0.1, 1, 10]
         #kernels = ["rbf", "poly", "sigmoid"]
+
         param_grid = { 'model__C' : Cs, 'model__gamma': gammas, 'model__epsilon': epsilons}#, 'kernel': kernels}
         
         scaler = preprocessing.StandardScaler()
         svr_estimator = svm.SVR()
-        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)])
-        
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, verbose = 10)
-
+        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)]) 
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
@@ -272,7 +270,10 @@ class predict_BC_lib():
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
     def train_NN(self, X, Y, scoring, best_params): 
+        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = alpha.item()
         kfold = 10
+
         if best_params != 'null':
             nb_neurons = [best_params[0]]
             activation = [best_params[1]]
@@ -290,21 +291,19 @@ class predict_BC_lib():
             optimizer = ['adam']
             alpha = [0.0001, 0.001, 0.01]
             learning_rate = ['constant', 'adaptive']
-        warnings.filterwarnings("ignore")
+        
         param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha, 'learning_rate': learning_rate}
+        scaler = preprocessing.StandardScaler()
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
+        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)]) 
         warnings.filterwarnings("ignore")
-        search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
         search.fit(X, np.ravel(Y))
-        print("Best parameter (CV score=%0.3f):" % search.best_score_)
-        print(search.best_params_)
-        warnings.resetwarnings()
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)     
-        print(cv_scores_df[["mean_train_score", "mean_test_score", "keep"]])
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]   
-        print(cv_scores_df[["mean_train_score", "mean_test_score", "keep"]])
+
         if len(cv_scores_df.index) == 0:
             print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
             return 0, 0, 0, 0, 0

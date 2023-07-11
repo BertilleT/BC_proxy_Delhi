@@ -6,7 +6,7 @@ from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.ensemble import RandomForestRegressor
-from sklearn import svm
+from sklearn.svm import SVR
 import torch
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
@@ -14,9 +14,10 @@ from sklearn.datasets import make_regression
 lib = predict_BC_lib()
 
 def train_test_ML(df, method, scoring, season, best_parameters):
+    #---------------------------------------------------------------------------------------------------------------------#
+    ## Pre-processing
     metrics = {}
-    #df = df.iloc[:336]
-    #store date time in separate df
+    #store date time in separate df in order to plot later the predictions and true values according to datetime
     df['datetime'] = df['date'].astype(str) + ' ' + df['Hrs.'].astype(str)
     df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S')
     datetime_df = df[["datetime"]]
@@ -24,6 +25,8 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     df = df.drop(["date","Hrs.", "datetime"], axis = 1)
     #store the number of features
     nb_col = len(df.columns)
+
+
     train_df, test_df = train_test_split(df, test_size=0.25, random_state=42)
     #the index is usefull to recover temporality and draw plots, so let us store it. 
     train_index = train_df.index
@@ -32,11 +35,13 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     #standardize
     scaler = preprocessing.StandardScaler()
     scaler.fit(train_df)
+    #scaling the training (not yet separated from the validation) would results in data leakage. Remind that we use cross validation.  
     #train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
     test_df = pd.DataFrame(scaler.transform(test_df), columns=test_df.columns, index=test_index)
 
+    #---------------------------------------------------------------------------------------------------------------------#
+    ## Training
 
-    #Training
     X_train = train_df.drop("BC", axis = 1)
     Y_train = train_df[["BC"]]
     et = time.time()
@@ -51,21 +56,20 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     if (model, best_parameters, train_predicted_Y, error_train, error_validation) == (0, 0, 0, 0, 0):
         return 'Fail in the training. Change the hyper parameters, or increase the value of alpha.'
     R2_train = r2_score(Y_train, train_predicted_Y)
-    #print('Execution time:', elapsed_time, ' minutes')
+    print('Execution time:', elapsed_time, ' minutes')
     #feature_importances_train = pd.DataFrame(model.feature_importances_, index = X_train.columns, columns=['importance']).sort_values('importance',ascending=False)
     R2_train = r2_score(Y_train, train_predicted_Y)
 
     unscaled_train_Y, unscaled_train_predicted_Y = lib.destandardize(Y_train, train_predicted_Y, scaler, nb_col)
-    #lib.BC_plot(unscaled_train_Y, unscaled_train_predicted_Y, datetime_df, scaler, season)
 
     #---------------------------------------------------------------------------------------------------------------------#
+    ## Testing
 
-    #Testing
     X_test = test_df.drop("BC", axis = 1)
     Y_test = test_df[["BC"]]
 
     if method == 'SVR':
-        model = svm.SVR(C = best_parameters[0], gamma = best_parameters[1], epsilon = best_parameters[2])
+        model = SVR(C = best_parameters[0], gamma = best_parameters[1], epsilon = best_parameters[2])
         model.fit(X_test, np.ravel(Y_test))
         test_predicted_Y = model.predict(X_test)    
     elif method == 'RF':
@@ -80,16 +84,17 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     unscaled_test_Y, unscaled_test_predicted_Y = lib.destandardize(Y_test, test_predicted_Y, scaler, nb_col)
     
     if scoring == 'neg_root_mean_squared_error':
-        error_test = np.sqrt(mean_squared_error(Y_test, test_predicted_Y))
+        #error_test = np.sqrt(mean_squared_error(Y_test, test_predicted_Y))
         unscaled_error_test = np.sqrt(mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y))
-    elif scoring == 'mean_absolute_error':
-        error_test = mean_absolute_error(Y_test, test_predicted_Y)
-        unscaled_error_test = mean_absolute_error(unscaled_test_Y, unscaled_test_predicted_Y)
     elif scoring == 'neg_mean_squared_error':
-        error_test = mean_squared_error(Y_test, test_predicted_Y)
+        #error_test = mean_squared_error(Y_test, test_predicted_Y)
         unscaled_error_test = mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y)
+    elif scoring == 'mean_absolute_error':
+        #error_test = mean_absolute_error(Y_test, test_predicted_Y)
+        unscaled_error_test = mean_absolute_error(unscaled_test_Y, unscaled_test_predicted_Y)
     
     R2_test = r2_score(Y_test, test_predicted_Y)
+
     lib.trueANDpred_time_plot(unscaled_test_Y, unscaled_test_predicted_Y, datetime_df, method, season)
     lib.trueVSpred_scatter_plot(unscaled_test_Y, unscaled_test_predicted_Y, method, season)
 
