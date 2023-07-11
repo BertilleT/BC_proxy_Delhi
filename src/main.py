@@ -10,13 +10,13 @@ method = 'NN'
 #dictonnaries with the best hyper parameters already found during the training. 
 best_param = {}
 if method == 'SVR': 
-    best_param["whole dataset"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
+    best_param["whole_dataset"] = [10, 0.1, 0.1] #WITH RH #[10, 0.1, 0.1] WITHOUT RH
     best_param["winter"] = 'null' #[100, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
     best_param["pre_monsoon"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.1] WITH RH
     best_param["summer"] = 'null' #[10, 0.1, 0.1]#[100, 0.1, 0.01] WITH RH
     best_param["post_monsoon"] = 'null' #[10, 0.1, 0.1]#[10, 0.1, 0.01] WITH RH
 elif method == 'RF':
-    best_param["whole dataset"] = [500, 10, 5]
+    best_param["whole_dataset"] = [500, 10, 5]
     best_param["winter"] = [10, 1, 3]
     best_param["pre_monsoon"] = [500, 30, 3]
     best_param["summer"] = [500, 15, 3]
@@ -34,7 +34,7 @@ scoring = 'neg_root_mean_squared_error'
 
 ## --------------- PROCESSING --------------- ##
 lib = predict_BC_lib()
-## Whole dataset 
+## whole_dataset 
 df = pd.read_excel(data_path)
 rh = pd.read_csv(RH_path)
 #lib.plot_RH(df, rh)

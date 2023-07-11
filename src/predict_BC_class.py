@@ -8,10 +8,13 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
+from sklearn.pipeline import Pipeline
 import warnings
+from sklearn import preprocessing
 
 class predict_BC_lib():
-    alpha = 0.06
+    #per is the percentage of difference between training and validation scores we are willing to accept
+    per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     def print_nan_per(self, df):
         nb_rows = len(df.index)
@@ -170,7 +173,6 @@ class predict_BC_lib():
         ax.axvline(pd.to_datetime('2018-06-01'), color='purple', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2018-09-01'), color='b', linestyle='--', lw=2)
 
-
         ax.axvline(pd.to_datetime('2019-12-01'), color='r', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2019-03-01'), color='g', linestyle='--', lw=2)
         ax.axvline(pd.to_datetime('2019-06-01'), color='purple', linestyle='--', lw=2)
@@ -181,27 +183,39 @@ class predict_BC_lib():
 
     def plot_season_split(self, df):
         fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 12))
-        one_year_plot(df, 2018, 1, 2018, 11, ax1)
-        one_year_plot(df, 2018, 12, 2019, 11, ax2)
+        self.one_year_plot(df, 2018, 1, 2018, 11, ax1)
+        self.one_year_plot(df, 2018, 12, 2019, 11, ax2)
         plt.tight_layout()
         plt.show()
 
-    def train_RF(self, X, Y, scoring, best_params):        
+    def train_RF(self, X, Y, scoring, best_params):   
+        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = alpha.item()
         kfold = 10
         if best_params != 'null':
             n_estimators = [best_params[0]]
             max_features = [best_params[1]]
             max_depth = [best_params[2]]
         else: 
-            n_estimators = [50, 100, 300, 500, 1000]
-            max_features = [1, 3, 5, 10, 15]
-            max_depth = [5, 10, 15, 20, 30]
-        param_grid = { 'n_estimators' : n_estimators, 'max_features': max_features, 'max_depth': max_depth}
+            #n_estimators = [50, 100, 300, 500, 1000]
+            #max_features = [1, 3, 5, 10, 15]
+            #max_depth = [5, 10, 15, 20, 30]
+            n_estimators = [500]
+            max_features = [1, 3, 10]
+            max_depth = [5, 10]
+
+        param_grid = {'model__n_estimators' : n_estimators, 'model__max_features': max_features, 'model__max_depth': max_depth}
+
+        scaler = preprocessing.StandardScaler()
         rf_estimator = RandomForestRegressor()
-        search = GridSearchCV(rf_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
+        pipe = Pipeline([('scaler',scaler),('model',rf_estimator)])
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
-        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)        
+       
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < alpha else 0, axis = 1) 
+        cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]    
+        
         if len(cv_scores_df.index) == 0:
             print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
             return 0, 0, 0, 0, 0
@@ -209,17 +223,16 @@ class predict_BC_lib():
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
-
-            best_n = best['param_n_estimators']#500
-            best_features = best['param_max_features']#10
-            best_depth = best['param_max_depth']#5
+            best_n = best['param_model__n_estimators']#500
+            best_features = best['param_model__max_features']#10
+            best_depth = best['param_model__max_depth']#5
             rf_estimator = RandomForestRegressor(n_estimators = best_n, max_features = best_features, max_depth = best_depth)
             rf_estimator.fit(X, np.ravel(Y))
             data_predict_train = rf_estimator.predict(X)
             return rf_estimator, [best_n, best_features, best_depth], data_predict_train, -error_train, -error_validation
 
     def train_SVR(self, X, Y, scoring, best_params):
-        kfold = 10
+        kfold = 2
         if best_params != 'null':
             Cs = [best_params[0]]
             gammas = [best_params[1]]
@@ -229,13 +242,20 @@ class predict_BC_lib():
             gammas = [0.0001, 0.001, 0.01, 0.1, 1]
             epsilons = [0.001, 0.01, 0.1, 1, 10]
         #kernels = ["rbf", "poly", "sigmoid"]
-        param_grid = { 'C' : Cs, 'gamma': gammas, 'epsilon': epsilons}#, 'kernel': kernels}
+        param_grid = { 'model__C' : Cs, 'model__gamma': gammas, 'model__epsilon': epsilons}#, 'kernel': kernels}
+        
+        scaler = preprocessing.StandardScaler()
         svr_estimator = svm.SVR()
-        search = GridSearchCV(svr_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
+        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)])
+        
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, verbose = 10)
+
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
+
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]
+
         if len(cv_scores_df.index) == 0:
             print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
             return 0, 0, 0, 0, 0
@@ -243,23 +263,15 @@ class predict_BC_lib():
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
-            best_c = best['param_C']
-            best_gamma = best['param_gamma']
-            best_eps = best['param_epsilon']
-            #best_kernel = best['param_kernel']
+            best_c = best['param_model__C']
+            best_gamma = best['param_model__gamma']
+            best_eps = best['param_model__epsilon']
             svr_estimator = svm.SVR(C = best_c, gamma = best_gamma, epsilon = best_eps)
             svr_estimator.fit(X, np.ravel(Y))
             data_predict_train = svr_estimator.predict(X)
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
     def train_NN(self, X, Y, scoring, best_params): 
-        param_grid = {
-            'hidden_layer_sizes': [(50,), (100, 50), (100, 100, 50)],
-            'activation': ['relu'],#'logistic'
-            'solver': ['adam'], #'sgd', 
-            'alpha': [0.001],#0.0001, , 0.01
-            'learning_rate': ['constant', 'adaptive']
-        }
         kfold = 10
         if best_params != 'null':
             nb_neurons = [best_params[0]]
@@ -278,14 +290,21 @@ class predict_BC_lib():
             optimizer = ['adam']
             alpha = [0.0001, 0.001, 0.01]
             learning_rate = ['constant', 'adaptive']
-            
+        warnings.filterwarnings("ignore")
         param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha, 'learning_rate': learning_rate}
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
         warnings.filterwarnings("ignore")
         search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True)
         search.fit(X, np.ravel(Y))
+        print("Best parameter (CV score=%0.3f):" % search.best_score_)
+        print(search.best_params_)
+        warnings.resetwarnings()
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
-        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)        
+
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)     
+        print(cv_scores_df[["mean_train_score", "mean_test_score", "keep"]])
+        cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]   
+        print(cv_scores_df[["mean_train_score", "mean_test_score", "keep"]])
         if len(cv_scores_df.index) == 0:
             print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
             return 0, 0, 0, 0, 0
