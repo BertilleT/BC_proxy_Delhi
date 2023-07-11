@@ -13,7 +13,8 @@ import warnings
 from sklearn import preprocessing
 
 class predict_BC_lib():
-    alpha = 0.8
+    #per is the percentage of difference between training and validation scores we are willing to accept
+    per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     def print_nan_per(self, df):
         nb_rows = len(df.index)
@@ -141,7 +142,9 @@ class predict_BC_lib():
         plt.tight_layout()
         plt.show()
 
-    def train_RF(self, X, Y, scoring, best_params):     
+    def train_RF(self, X, Y, scoring, best_params):   
+        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = alpha.item()
         kfold = 10
         if best_params != 'null':
             n_estimators = [best_params[0]]
@@ -160,21 +163,13 @@ class predict_BC_lib():
         scaler = preprocessing.StandardScaler()
         rf_estimator = RandomForestRegressor()
         pipe = Pipeline([('scaler',scaler),('model',rf_estimator)])
-        
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = True, return_train_score=True, verbose = 10, n_jobs=2)
+        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
         search.fit(X, np.ravel(Y))
-        search.fit_transform(X, np.ravel(Y))
-
-        #print("Best parameter (CV score=%0.3f):" % search.best_score_)
-        #print(search.best_params_)
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
-        # Standardize mean_train_score and mean_test_score
-        print(cv_scores_df[["mean_train_score", "mean_test_score"]])
-
-        
-        pd.set_option('display.max_columns', None)
-        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1) 
+       
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < alpha else 0, axis = 1) 
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]    
+        
         if len(cv_scores_df.index) == 0:
             print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
             return 0, 0, 0, 0, 0

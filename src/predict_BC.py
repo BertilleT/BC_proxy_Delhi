@@ -96,8 +96,8 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     metrics['best_parameters'] = best_parameters
     metrics['error_train'] = round(error_train,2)
     metrics['error_validation'] = round(error_validation, 2)
-    metrics['error_test'] = round(error_test, 2)
-    metrics['unscaled_error_test'] = round(unscaled_error_test, 2)
+    #metrics['error_test'] = round(error_test, 2)
+    metrics['error_test'] = round(unscaled_error_test, 2)
     metrics['R2_train'] = round(R2_train, 2)
     metrics['R2_test'] = round(R2_test, 2)
 

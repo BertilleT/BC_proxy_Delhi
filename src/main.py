@@ -45,7 +45,7 @@ df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
 metrics = train_test_ML(df, method, scoring, "whole_dataset", best_param)
 print(metrics)
 
-"""## Seasonal subset 
+## Seasonal subset 
 #split df into seasons
 df = pd.read_excel(data_path)
 df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
@@ -58,4 +58,4 @@ for season, season_df in seasons_dict.items():
     df = season_df
     df = lib.remove_nan(df)
     metrics = train_test_ML(df, method, scoring, season, best_param)
-    print(metrics)"""
+    print(metrics)
