@@ -10,23 +10,20 @@ from sklearn.svm import SVR
 import torch
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
+pd.options.mode.chained_assignment = None
 
 lib = predict_BC_lib()
 
 def train_test_ML(df, method, scoring, season, best_parameters):
+    df = df.drop(["date","Hrs.", "datetime"], axis = 1)
     #---------------------------------------------------------------------------------------------------------------------#
     ## Pre-processing
     metrics = {}
-    #store date time in separate df in order to plot later the predictions and true values according to datetime
-    df['datetime'] = df['date'].astype(str) + ' ' + df['Hrs.'].astype(str)
-    df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S')
-    datetime_df = df[["datetime"]]
-    #remove the date time columns
-    df = df.drop(["date","Hrs.", "datetime"], axis = 1)
     #store the number of features
     nb_col = len(df.columns)
-
-
+    print("95% of the BC values of the set under study are between " + str(df["BC"].min().round()) + " and " + str(df["BC"].quantile(0.95).round()))
+    #print("The range is: " + str((df["BC"].quantile(0.95) - df["BC"].min()).round()))
+    print("The mean is: " +  str(df["BC"].mean().round()))
     train_df, test_df = train_test_split(df, test_size=0.25, random_state=42)
     #the index is usefull to recover temporality and draw plots, so let us store it. 
     train_index = train_df.index
@@ -36,7 +33,7 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     scaler = preprocessing.StandardScaler()
     scaler.fit(train_df)
     #scaling the training (not yet separated from the validation) would results in data leakage. Remind that we use cross validation.  
-    #train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
+    train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
     test_df = pd.DataFrame(scaler.transform(test_df), columns=test_df.columns, index=test_index)
 
     #---------------------------------------------------------------------------------------------------------------------#
@@ -44,21 +41,20 @@ def train_test_ML(df, method, scoring, season, best_parameters):
 
     X_train = train_df.drop("BC", axis = 1)
     Y_train = train_df[["BC"]]
-    et = time.time()
+    st = time.time()
     if method == 'SVR':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train, Y_train, scoring, best_parameters[season])
     elif method == 'RF':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_RF(X_train, Y_train, scoring, best_parameters[season])
     elif method == 'NN':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_NN(X_train, Y_train, scoring, best_parameters[season])
-    st = time.time()
+    et = time.time()
     elapsed_time = (et - st) / 60
     if (model, best_parameters, train_predicted_Y, error_train, error_validation) == (0, 0, 0, 0, 0):
         return 'Fail in the training. Change the hyper parameters, or increase the value of alpha.'
     R2_train = r2_score(Y_train, train_predicted_Y)
-    print('Execution time:', elapsed_time, ' minutes')
+    #print('Execution time:', elapsed_time, ' minutes')
     #feature_importances_train = pd.DataFrame(model.feature_importances_, index = X_train.columns, columns=['importance']).sort_values('importance',ascending=False)
-    R2_train = r2_score(Y_train, train_predicted_Y)
 
     unscaled_train_Y, unscaled_train_predicted_Y = lib.destandardize(Y_train, train_predicted_Y, scaler, nb_col)
 
@@ -89,14 +85,11 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     elif scoring == 'neg_mean_squared_error':
         #error_test = mean_squared_error(Y_test, test_predicted_Y)
         unscaled_error_test = mean_squared_error(unscaled_test_Y, unscaled_test_predicted_Y)
-    elif scoring == 'mean_absolute_error':
+    elif scoring == 'neg_mean_absolute_error':
         #error_test = mean_absolute_error(Y_test, test_predicted_Y)
         unscaled_error_test = mean_absolute_error(unscaled_test_Y, unscaled_test_predicted_Y)
     
     R2_test = r2_score(Y_test, test_predicted_Y)
-
-    lib.trueANDpred_time_plot(unscaled_test_Y, unscaled_test_predicted_Y, datetime_df, method, season)
-    lib.trueVSpred_scatter_plot(unscaled_test_Y, unscaled_test_predicted_Y, method, season)
 
     metrics['best_parameters'] = best_parameters
     metrics['error_train'] = round(error_train,2)
@@ -106,4 +99,4 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     metrics['R2_train'] = round(R2_train, 2)
     metrics['R2_test'] = round(R2_test, 2)
 
-    return metrics
+    return unscaled_test_Y, unscaled_test_predicted_Y, metrics

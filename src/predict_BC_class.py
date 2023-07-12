@@ -9,20 +9,32 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
 from sklearn.pipeline import Pipeline
-import warnings
 from sklearn import preprocessing
+import warnings
 
+# ignore all future warnings
 class predict_BC_lib():
     #per is the percentage of difference between training and validation scores we are willing to accept
     per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     
+    def warn(*args, **kwargs):
+        pass
+
     def print_nan_per(self, df):
         nb_rows = len(df.index)
         for col in df.columns:
             per_missing = (df[col].isna().sum())*100/nb_rows
             print(str(col) + '  :  '+ str(round(per_missing))+' % of missing values')
     
+    def concat_date_time(self, df):
+        #store date time in separate df in order to plot later the predictions and true values according to datetime
+        df['datetime'] = df['date'].astype(str) + ' ' + df['Hrs.'].astype(str)
+        df['datetime'] = pd.to_datetime(df['datetime'], format='%Y-%m-%d %H:%M:%S')
+        datetime_df = df[["datetime"]]
+        #remove the date time columns
+        return df, datetime_df
+
     def impute_RH(self, df, rh):
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
         rh['date'] = rh['From Date'].dt.date
@@ -96,14 +108,15 @@ class predict_BC_lib():
         rh = rh.rename(columns={'RH': 'RH_new'})
         df = df.merge(rh, on='date') 
         df['RH_new'] = df['RH_new'].replace('None', np.nan).astype(float)
+        df = df.groupby(pd.Grouper(key='date', axis=0, freq='d')).mean()
+        df = df.reset_index()
         fig, ax = plt.subplots()
 
-        ax.plot(df['date'], df['RH'], label='RH')
-        ax.plot(df['date'], df['RH_new'], label='RH_new')
+        ax.plot(df['date'], df['RH'], label='RH', color='b', lw=2)
+        ax.plot(df['date'], df['RH_new'], label='RH_new', color="r")
         ax.set_xlabel('Time')
         ax.set_ylabel('RH')
         ax.legend()
-
         plt.show()
 
     ##plot true values and prediction according to time
@@ -129,9 +142,9 @@ class predict_BC_lib():
         ax.set_xlabel('Time')
         ax.set_ylabel('BlackCarbon in µg/m3')
         ax.set_title('Testing: true vs predicted values with ' + method + ' in ' + str(season))
-        #plt.show()
         ax.legend()
-        fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
+        plt.show()
+        #fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
 
     ##plot scatter of true values against prediction 
     def trueVSpred_scatter_plot(self, Y_true, Y_prediction, method, season):
@@ -143,41 +156,43 @@ class predict_BC_lib():
         ax.set_xlabel('True Values')
         ax.set_ylabel('Predicted Values')
         ax.set_title('Testing: predicted values with ' + method + ' vs true values in ' + str(season))
-        #plt.show()
-        fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
-
-    def year_by_year_plot(self, df, year, ax):
-        one_year_df = df[(df['datetime'].dt.year == year)]
-        one_year_df.set_index('datetime', inplace=True)
-        ax.scatter(one_year_df.index,one_year_df["BC"], marker='.')
-        ax.set_xlim([datetime.date(year, 1, 1), datetime.date(year, 12, 31)])
-        ax.axvline(pd.to_datetime(str(year)+'--01'), color='r', linestyle='--', lw=2)
-        ax.set_xlabel('Time')
-        ax.set_ylabel('BlackCarbon in µg/m3')
-        ax.set_title(str(year))
+        plt.show()
+        #fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
 
     def one_year_plot(self, df, start_year, start_month, end_year, end_month, ax, start_day=1, end_day=1):
         start_date = pd.to_datetime(f"{start_year}-{start_month}-{start_day}", format='%Y-%m-%d')
-        end_date = pd.to_datetime(f"{end_year}-{end_month}-{end_day}", format='%Y-%m-%d') #+ pd.offsets.MonthEnd(1)
+        end_date = pd.to_datetime(f"{end_year}-{end_month}-{end_day}", format='%Y-%m-%d') + pd.offsets.MonthEnd(1)
         one_year_df = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
         one_year_df.set_index('datetime', inplace=True)
         ax.scatter(one_year_df.index, one_year_df["BC"], marker='.')
         ax.set_xlim([datetime.date(end_year-1, 12, 1), datetime.date(end_year, end_month, 30)])
-        ax.axvline(pd.to_datetime('2018-12-01'), color='r', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2018-03-01'), color='g', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2018-06-01'), color='purple', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2018-09-01'), color='b', linestyle='--', lw=2)
 
-        ax.axvline(pd.to_datetime('2019-12-01'), color='r', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2019-03-01'), color='g', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2019-06-01'), color='purple', linestyle='--', lw=2)
-        ax.axvline(pd.to_datetime('2019-09-01'), color='b', linestyle='--', lw=2)
+        if plt.gca() is ax:
+            ax.axvline(pd.to_datetime('2018-12-01'), color='r', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2018-03-01'), color='g', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2018-06-01'), color='purple', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2018-09-01'), color='b', linestyle='--', lw=2)
+            ax.text(datetime.date(2018, 1, 10), 110, "winter", color = "r", fontsize = 17)
+            ax.text(datetime.date(2018, 4, 1), 110, "pre-monsoon", color = "g", fontsize = 17)
+            ax.text(datetime.date(2018, 7, 10), 110, "monsoon", color = "purple", fontsize = 17)
+            ax.text(datetime.date(2018, 10, 1), 110, "post-monsoon", color = "b", fontsize = 17)
+        else: 
+            ax.axvline(pd.to_datetime('2019-12-01'), color='r', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2019-03-01'), color='g', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2019-06-01'), color='purple', linestyle='--', lw=2)
+            ax.axvline(pd.to_datetime('2019-09-01'), color='b', linestyle='--', lw=2)
+            ax.text(datetime.date(2019, 1, 10), 110, "winter", color = "r", fontsize = 17)
+            ax.text(datetime.date(2019, 4, 1), 110, "pre-monsoon", color = "g", fontsize = 17)
+            ax.text(datetime.date(2019, 7, 10), 110, "monsoon", color = "purple", fontsize = 17)
+            ax.text(datetime.date(2019, 10, 1), 110, "post-monsoon", color = "b", fontsize = 17)
         ax.set_xlabel('Time')
         ax.set_ylabel('BlackCarbon in µg/m3')
         ax.set_title(f'{start_date:%b %Y} - {end_date:%b %Y}')
+        
 
-    def plot_season_split(self, df):
+    def season_split_plot(self, df):
         fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 12))
+        plt.sca(ax1)
         self.one_year_plot(df, 2018, 1, 2018, 11, ax1)
         self.one_year_plot(df, 2018, 12, 2019, 11, ax2)
         plt.tight_layout()
@@ -204,7 +219,7 @@ class predict_BC_lib():
 
         scaler = preprocessing.StandardScaler()
         rf_estimator = RandomForestRegressor()
-        pipe = Pipeline([('scaler',scaler),('model',rf_estimator)])
+        pipe = Pipeline([('scaler', scaler), ('model', rf_estimator)])
         search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
@@ -213,7 +228,7 @@ class predict_BC_lib():
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]    
         
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
+            print(predict_BC_lib.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
@@ -251,11 +266,11 @@ class predict_BC_lib():
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
-        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < alpha else 0, axis = 1)
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]
 
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
+            print(predict_BC_lib.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
@@ -270,6 +285,7 @@ class predict_BC_lib():
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
     def train_NN(self, X, Y, scoring, best_params): 
+        #simplefilter(action='ignore', category=FutureWarning)
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
@@ -278,48 +294,50 @@ class predict_BC_lib():
             nb_neurons = [best_params[0]]
             activation = [best_params[1]]
             optimizer = [best_params[2]]
-            alpha = [best_params[3]]
+            alpha_nn = [best_params[3]]
             learning_rate = [best_params[4]]
         else: 
             """nb_neurons = [(50,), (100, 50), (100, 100, 50)]
             activation = ['logistic', 'relu']
             optimizer = ['sgd', 'adam']
-            alpha = [0.0001, 0.001, 0.01]
+            alpha_nn = [0.0001, 0.001, 0.01]
             learning_rate = ['constant', 'adaptive']"""
             nb_neurons = [(50,), (100, 50), (100, 100, 50)]
             activation = ['relu']
             optimizer = ['adam']
-            alpha = [0.0001, 0.001, 0.01]
-            learning_rate = ['constant', 'adaptive']
+            alpha_nn = [0.0001, 0.001, 0.01]
+            learning_rate = ['constant']
         
-        param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha, 'learning_rate': learning_rate}
+        param_grid = { 'model__hidden_layer_sizes' : nb_neurons, 'model__activation': activation, 'model__solver': optimizer, 'model__alpha': alpha_nn, 'model__learning_rate': learning_rate}
+        
         scaler = preprocessing.StandardScaler()
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
-        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)]) 
-        warnings.filterwarnings("ignore")
+        pipe = Pipeline([('scaler', scaler), ('model', mlp_estimator)]) 
         search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        #warnings.filterwarnings("ignore")
+        #warnings.warn = self.warn
+
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
-        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < predict_BC_lib.alpha else 0, axis = 1)     
+        cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < alpha else 0, axis = 1)     
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]   
 
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(predict_BC_lib.alpha))
+            print(predict_BC_lib.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
 
-            best_hidden_layer_sizes = best['param_hidden_layer_sizes']
-            best_activation = best['param_activation']
-            best_solver = best['param_solver']
-            best_alpha = best['param_alpha']
-            best_learning_rate = best['param_learning_rate']
+            best_hidden_layer_sizes = best['param_model__hidden_layer_sizes']
+            best_activation = best['param_model__activation']
+            best_solver = best['param_model__solver']
+            best_alpha = best['param_model__alpha']
+            best_learning_rate = best['param_model__learning_rate']
 
             mlp_estimator = MLPRegressor(hidden_layer_sizes = best_hidden_layer_sizes, activation = best_activation, solver = best_solver, alpha = best_alpha, learning_rate = best_learning_rate)
             mlp_estimator.fit(X, np.ravel(Y))
             data_predict_train = mlp_estimator.predict(X)
             return mlp_estimator, [best_hidden_layer_sizes, best_activation, best_solver, best_alpha, best_learning_rate], data_predict_train, -error_train, -error_validation
-        return  mlp, best_params, train_predicted_Y_np, error_train, error_validation
