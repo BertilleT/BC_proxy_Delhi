@@ -14,17 +14,20 @@ pd.options.mode.chained_assignment = None
 
 lib = predict_BC_lib()
 
-def train_test_ML(df, method, scoring, season, best_parameters):
-    df = df.drop(["date","Hrs.", "datetime"], axis = 1)
+def train_test_ML(df, method, scoring, season, best_parameters, std_all_training):
     #---------------------------------------------------------------------------------------------------------------------#
     ## Pre-processing
     metrics = {}
+    df = df.drop(["date","Hrs.", "datetime"], axis = 1)
     #store the number of features
     nb_col = len(df.columns)
     print("95% of the BC values of the set under study are between " + str(df["BC"].min().round()) + " and " + str(df["BC"].quantile(0.95).round()))
-    #print("The range is: " + str((df["BC"].quantile(0.95) - df["BC"].min()).round()))
     print("The mean is: " +  str(df["BC"].mean().round()))
+
+    X = df.drop("BC", axis = 1)
+    y = df[["BC"]]
     train_df, test_df = train_test_split(df, test_size=0.25, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
     #the index is usefull to recover temporality and draw plots, so let us store it. 
     train_index = train_df.index
     test_index = test_df.index
@@ -33,7 +36,9 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     scaler = preprocessing.StandardScaler()
     scaler.fit(train_df)
     #scaling the training (not yet separated from the validation) would results in data leakage. Remind that we use cross validation.  
-    train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
+    if std_all_training == True:
+        train_df = pd.DataFrame(scaler.transform(train_df), columns=train_df.columns, index=train_index)
+
     test_df = pd.DataFrame(scaler.transform(test_df), columns=test_df.columns, index=test_index)
 
     #---------------------------------------------------------------------------------------------------------------------#
@@ -43,7 +48,7 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     Y_train = train_df[["BC"]]
     st = time.time()
     if method == 'SVR':
-        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train, Y_train, scoring, best_parameters[season])
+        model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train, Y_train, scoring, best_parameters[season], std_all_training)
     elif method == 'RF':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_RF(X_train, Y_train, scoring, best_parameters[season])
     elif method == 'NN':
@@ -52,15 +57,17 @@ def train_test_ML(df, method, scoring, season, best_parameters):
     elapsed_time = (et - st) / 60
     if (model, best_parameters, train_predicted_Y, error_train, error_validation) == (0, 0, 0, 0, 0):
         return 'Fail in the training. Change the hyper parameters, or increase the value of alpha.'
+    
+    if std_all_training == True:
+        Y_train, train_predicted_Y = lib.destandardize(Y_train, train_predicted_Y, scaler, nb_col)
+
+    #R2 train unscaled data
     R2_train = r2_score(Y_train, train_predicted_Y)
     #print('Execution time:', elapsed_time, ' minutes')
     #feature_importances_train = pd.DataFrame(model.feature_importances_, index = X_train.columns, columns=['importance']).sort_values('importance',ascending=False)
-
-    unscaled_train_Y, unscaled_train_predicted_Y = lib.destandardize(Y_train, train_predicted_Y, scaler, nb_col)
-
+    
     #---------------------------------------------------------------------------------------------------------------------#
     ## Testing
-
     X_test = test_df.drop("BC", axis = 1)
     Y_test = test_df[["BC"]]
 

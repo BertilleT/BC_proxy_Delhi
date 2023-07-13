@@ -11,15 +11,18 @@ from sklearn.datasets import make_regression
 from sklearn.pipeline import Pipeline
 from sklearn import preprocessing
 import warnings
+import sys
+import os
 
-# ignore all future warnings
 class predict_BC_lib():
     #per is the percentage of difference between training and validation scores we are willing to accept
     per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     
-    def warn(*args, **kwargs):
-        pass
+    # ignore mlp warnings (from the pipeline)
+    if not sys.warnoptions:
+        warnings.simplefilter("ignore")
+        os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
     def print_nan_per(self, df):
         nb_rows = len(df.index)
@@ -68,6 +71,19 @@ class predict_BC_lib():
         df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
         return df 
 
+    def split(self, df):
+        winter_df = df[(df['date'].dt.month >= 12) | (df['date'].dt.month <= 2)]
+        pre_monsoon_df = df[(df['date'].dt.month >= 3) & (df['date'].dt.month <= 5)]
+        summer_df = df[(df['date'].dt.month >= 6) & (df['date'].dt.month <= 8)]
+        post_monsoon_df = df[(df['date'].dt.month >= 9) & (df['date'].dt.month <= 10)]
+        return winter_df, pre_monsoon_df, summer_df, post_monsoon_df
+
+    def filter_df(self, start_date, end_date, df):
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+        filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
+        return filtered_df
+    
     ##destandardize the prediction
     def destandardize(self, Y_true_std, Y_prediction_std, scaler, nb_col):
         #std stands for standardized
@@ -87,19 +103,6 @@ class predict_BC_lib():
         #keep index is important. The predictions do not have them but the true values yes. 
         return Y_true_destd, Y_prediction_destd
 
-    def split(self, df):
-        winter_df = df[(df['date'].dt.month >= 12) | (df['date'].dt.month <= 2)]
-        pre_monsoon_df = df[(df['date'].dt.month >= 3) & (df['date'].dt.month <= 5)]
-        summer_df = df[(df['date'].dt.month >= 6) & (df['date'].dt.month <= 8)]
-        post_monsoon_df = df[(df['date'].dt.month >= 9) & (df['date'].dt.month <= 10)]
-        return winter_df, pre_monsoon_df, summer_df, post_monsoon_df
-
-    def filter_df(self, start_date, end_date, df):
-        start_date = pd.to_datetime(start_date)
-        end_date = pd.to_datetime(end_date)
-        filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
-        return filtered_df
-        
     def plot_RH(self, df, rh):
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
         rh['date'] = rh['From Date'].dt.date
@@ -118,7 +121,7 @@ class predict_BC_lib():
         ax.set_ylabel('RH')
         ax.legend()
         plt.show()
-
+    
     ##plot true values and prediction according to time
     def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season):
         #merge datetime_df and unscaled_test_Y based on the index. 
@@ -242,7 +245,7 @@ class predict_BC_lib():
             data_predict_train = rf_estimator.predict(X)
             return rf_estimator, [best_n, best_features, best_depth], data_predict_train, -error_train, -error_validation
 
-    def train_SVR(self, X, Y, scoring, best_params):
+    def train_SVR(self, X, Y, scoring, best_params, std_all_training):
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
@@ -252,17 +255,22 @@ class predict_BC_lib():
             gammas = [best_params[1]]
             epsilons = [best_params[2]]
         else: 
-            Cs = [1, 5, 10, 50, 100]
-            gammas = [0.0001, 0.001, 0.01, 0.1, 1]
-            epsilons = [0.001, 0.01, 0.1, 1, 10]
+            Cs = [1, 10, 100]
+            gammas = [0.001, 0.01, 0.1]
+            epsilons = [0.01, 0.1, 1]
         #kernels = ["rbf", "poly", "sigmoid"]
 
-        param_grid = { 'model__C' : Cs, 'model__gamma': gammas, 'model__epsilon': epsilons}#, 'kernel': kernels}
+        param_grid = { 'C' : Cs, 'gamma': gammas, 'epsilon': epsilons}#, 'kernel': kernels}
         
-        scaler = preprocessing.StandardScaler()
         svr_estimator = svm.SVR()
-        pipe = Pipeline([('scaler',scaler),('model',svr_estimator)]) 
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        if std_all_training == False:
+            scaler = preprocessing.StandardScaler()
+            param_grid = {'model__' + key: value for key, value in param_grid.items()}
+            pipe = Pipeline([('scaler', scaler), ('model', svr_estimator)]) 
+            search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        else: 
+            search = GridSearchCV(svr_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
@@ -276,12 +284,22 @@ class predict_BC_lib():
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
-            best_c = best['param_model__C']
-            best_gamma = best['param_model__gamma']
-            best_eps = best['param_model__epsilon']
+            if std_all_training == False:
+                best_c = best['param_model__C']
+                best_gamma = best['param_model__gamma']
+                best_eps = best['param_model__epsilon']
+            else:
+                best_c = best['param_C']
+                best_gamma = best['param_gamma']
+                best_eps = best['param_epsilon']
+            
             svr_estimator = svm.SVR(C = best_c, gamma = best_gamma, epsilon = best_eps)
+            if std_all_training == False:
+                scaler = preprocessing.StandardScaler()
+                X = scaler.fit_transform(X)
             svr_estimator.fit(X, np.ravel(Y))
             data_predict_train = svr_estimator.predict(X)
+            
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
     def train_NN(self, X, Y, scoring, best_params): 
