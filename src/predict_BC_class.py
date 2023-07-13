@@ -83,25 +83,6 @@ class predict_BC_lib():
         end_date = pd.to_datetime(end_date)
         filtered_df = df[(df['date'] < start_date) | (df['date'] > end_date)]
         return filtered_df
-    
-    ##destandardize the prediction
-    def destandardize(self, Y_true_std, Y_prediction_std, scaler, nb_col):
-        #std stands for standardized
-        #compute the unscaled error
-        Y_true_expanded = pd.DataFrame(np.zeros(shape=(len(Y_true_std), nb_col)))
-        #Y_true_expanded.iloc[:, 0] = Y_true_std.values.flatten()
-        Y_true_index = Y_true_std.index
-        Y_true_expanded.iloc[:, 0] = Y_true_std[["BC"]].to_numpy()
-        Y_true_destd = pd.DataFrame(scaler.inverse_transform(Y_true_expanded))[0]
-
-        Y_prediction_expanded = pd.DataFrame(np.zeros(shape=(len(Y_prediction_std), nb_col)))
-        Y_prediction_expanded.iloc[:, 0] = Y_prediction_std[:]
-        Y_prediction_destd = pd.DataFrame(scaler.inverse_transform(Y_prediction_expanded))[0]
-        
-        Y_true_destd = Y_true_destd.set_axis(Y_true_index)
-        Y_prediction_destd = Y_prediction_destd.set_axis(Y_true_index)
-        #keep index is important. The predictions do not have them but the true values yes. 
-        return Y_true_destd, Y_prediction_destd
 
     def plot_RH(self, df, rh):
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
@@ -123,7 +104,7 @@ class predict_BC_lib():
         plt.show()
     
     ##plot true values and prediction according to time
-    def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season):
+    def trueANDpred_time_plot(self, Y_true, Y_prediction, datetime, method, season, save_images):
         #merge datetime_df and unscaled_test_Y based on the index. 
         Y_true = pd.DataFrame(Y_true).join(datetime)
         Y_true['datetime'] = pd.to_datetime(Y_true['datetime'])
@@ -134,33 +115,36 @@ class predict_BC_lib():
         Y_prediction.set_index('datetime', inplace=True)
         Y_true = Y_true.sort_index()
         Y_prediction = Y_prediction.sort_index()
-
-        Y_true = Y_true.head(168)
-        Y_prediction = Y_prediction.head(168)
+        if season == 'winter': #and RH_included == True and RH_imputed == False:
+            nb_rows = 144 #6 days (there are missing values between the 6th and 7th day)
+        else:
+            nb_rows = 168 # = 24*7 = one week
+        Y_true = Y_true.head(nb_rows)
+        Y_prediction = Y_prediction.head(nb_rows)
 
         fig, ax = plt.subplots(figsize=(12,9))
-        ax.plot(Y_true.index, Y_true[0], label='True values', color='blue')
-        ax.plot(Y_prediction.index, Y_prediction[0], label='Predicted values', color='red',)# marker='.')
+        ax.plot(Y_true.index, Y_true["BC"], label='True values', color='blue')
+        ax.plot(Y_prediction.index, Y_prediction["BC"], label='Predicted values', color='red',)# marker='.')
         ax.set_xlim(Y_true.index.min(), Y_true.index.max())
         ax.set_xlabel('Time')
         ax.set_ylabel('BlackCarbon in µg/m3')
         ax.set_title('Testing: true vs predicted values with ' + method + ' in ' + str(season))
         ax.legend()
-        plt.show()
-        #fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
+        if save_images == True:
+            fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
 
     ##plot scatter of true values against prediction 
-    def trueVSpred_scatter_plot(self, Y_true, Y_prediction, method, season):
+    def trueVSpred_scatter_plot(self, Y_true, Y_prediction, method, season, save_images):
         fig, ax = plt.subplots(figsize=(9,9))
-        ax.scatter(Y_true, Y_prediction)
-        ax.plot([min(Y_true), max(Y_true)], [min(Y_true), max(Y_true)], color='red', linestyle='--')
+        ax.scatter(Y_true.values, Y_prediction.values)
+        ax.plot([min(Y_true["BC"]), max(Y_true["BC"])], [min(Y_true["BC"]), max(Y_true["BC"])], color='red', linestyle='--')
         ax.set_xlim(xmin=0)
         ax.set_ylim(ymin=0) 
         ax.set_xlabel('True Values')
         ax.set_ylabel('Predicted Values')
         ax.set_title('Testing: predicted values with ' + method + ' vs true values in ' + str(season))
-        plt.show()
-        #fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
+        if save_images == True:
+            fig.savefig('../img/' + method + '/predictedVStrue_'+ method +'_' + season + '.png')
 
     def one_year_plot(self, df, start_year, start_month, end_year, end_month, ax, start_day=1, end_day=1):
         start_date = pd.to_datetime(f"{start_year}-{start_month}-{start_day}", format='%Y-%m-%d')
@@ -193,15 +177,22 @@ class predict_BC_lib():
         ax.set_title(f'{start_date:%b %Y} - {end_date:%b %Y}')
         
 
-    def season_split_plot(self, df):
+    def season_split_plot(self, df, RH_included, RH_imputed):
         fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 12))
         plt.sca(ax1)
         self.one_year_plot(df, 2018, 1, 2018, 11, ax1)
         self.one_year_plot(df, 2018, 12, 2019, 11, ax2)
         plt.tight_layout()
-        plt.show()
+        if save_images == True:
+            if RH_included == True:
+                if RH_imputed == True: 
+                    fig.savefig('../img/seasons_split/BC_seasons_RH_imputed.png')
+                elif RH_imputed == False: 
+                    fig.savefig('../img/seasons_split/BC_seasons_RH_included_nan_dropped.png')
+            elif RH_included == False:
+                fig.savefig('../img/seasons_split/BC_seasons_RH_excluded.png')
 
-    def train_RF(self, X, Y, scoring, best_params):   
+    def train_RF(self, X, Y, scoring, best_params, std_all_training):   
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
@@ -211,19 +202,22 @@ class predict_BC_lib():
             max_features = [best_params[1]]
             max_depth = [best_params[2]]
         else: 
-            #n_estimators = [50, 100, 300, 500, 1000]
-            #max_features = [1, 3, 5, 10, 15]
-            #max_depth = [5, 10, 15, 20, 30]
-            n_estimators = [500]
-            max_features = [1, 3, 10]
-            max_depth = [5, 10]
+            n_estimators = [10, 100, 500]
+            max_features = [1, 5, 10, 15, 20, 30]
+            max_depth = [3, 5]
 
-        param_grid = {'model__n_estimators' : n_estimators, 'model__max_features': max_features, 'model__max_depth': max_depth}
+        param_grid = {'n_estimators' : n_estimators, 'max_features': max_features, 'max_depth': max_depth}
 
-        scaler = preprocessing.StandardScaler()
         rf_estimator = RandomForestRegressor()
-        pipe = Pipeline([('scaler', scaler), ('model', rf_estimator)])
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+
+        if std_all_training == False:
+            scaler = preprocessing.StandardScaler()
+            param_grid = {'model__' + key: value for key, value in param_grid.items()}
+            pipe = Pipeline([('scaler', scaler), ('model', rf_estimator)]) 
+            search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        else: 
+            search = GridSearchCV(rf_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
        
@@ -237,12 +231,22 @@ class predict_BC_lib():
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
-            best_n = best['param_model__n_estimators']#500
-            best_features = best['param_model__max_features']#10
-            best_depth = best['param_model__max_depth']#5
+            if std_all_training == False:
+                best_n = best['param_model__n_estimators']
+                best_features = best['param_model__max_features']
+                best_depth = best['param_model__max_depth']
+            else:
+                best_n = best['param_n_estimators']
+                best_features = best['param_max_features']
+                best_depth = best['param_max_depth']
+
             rf_estimator = RandomForestRegressor(n_estimators = best_n, max_features = best_features, max_depth = best_depth)
+            if std_all_training == False:
+                scaler = preprocessing.StandardScaler()
+                X = scaler.fit_transform(X)
             rf_estimator.fit(X, np.ravel(Y))
             data_predict_train = rf_estimator.predict(X)
+
             return rf_estimator, [best_n, best_features, best_depth], data_predict_train, -error_train, -error_validation
 
     def train_SVR(self, X, Y, scoring, best_params, std_all_training):
@@ -258,11 +262,12 @@ class predict_BC_lib():
             Cs = [1, 10, 100]
             gammas = [0.001, 0.01, 0.1]
             epsilons = [0.01, 0.1, 1]
-        #kernels = ["rbf", "poly", "sigmoid"]
+            #kernels = ["rbf", "poly", "sigmoid"]
 
         param_grid = { 'C' : Cs, 'gamma': gammas, 'epsilon': epsilons}#, 'kernel': kernels}
         
         svr_estimator = svm.SVR()
+
         if std_all_training == False:
             scaler = preprocessing.StandardScaler()
             param_grid = {'model__' + key: value for key, value in param_grid.items()}
@@ -302,8 +307,7 @@ class predict_BC_lib():
             
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
-    def train_NN(self, X, Y, scoring, best_params): 
-        #simplefilter(action='ignore', category=FutureWarning)
+    def train_NN(self, X, Y, scoring, best_params, std_all_training): 
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
@@ -315,26 +319,24 @@ class predict_BC_lib():
             alpha_nn = [best_params[3]]
             learning_rate = [best_params[4]]
         else: 
-            """nb_neurons = [(50,), (100, 50), (100, 100, 50)]
-            activation = ['logistic', 'relu']
-            optimizer = ['sgd', 'adam']
-            alpha_nn = [0.0001, 0.001, 0.01]
-            learning_rate = ['constant', 'adaptive']"""
             nb_neurons = [(50,), (100, 50), (100, 100, 50)]
             activation = ['relu']
             optimizer = ['adam']
             alpha_nn = [0.0001, 0.001, 0.01]
             learning_rate = ['constant']
         
-        param_grid = { 'model__hidden_layer_sizes' : nb_neurons, 'model__activation': activation, 'model__solver': optimizer, 'model__alpha': alpha_nn, 'model__learning_rate': learning_rate}
+        param_grid = { 'hidden_layer_sizes' : nb_neurons, 'activation': activation, 'solver': optimizer, 'alpha': alpha_nn, 'learning_rate': learning_rate}
         
-        scaler = preprocessing.StandardScaler()
         mlp_estimator = MLPRegressor(random_state=1, max_iter=50)
-        pipe = Pipeline([('scaler', scaler), ('model', mlp_estimator)]) 
-        search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
-        #warnings.filterwarnings("ignore")
-        #warnings.warn = self.warn
 
+        if std_all_training == False:
+            scaler = preprocessing.StandardScaler()
+            param_grid = {'model__' + key: value for key, value in param_grid.items()}
+            pipe = Pipeline([('scaler', scaler), ('model', mlp_estimator)]) 
+            search = GridSearchCV(pipe, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        else: 
+            search = GridSearchCV(mlp_estimator, scoring = scoring, param_grid = param_grid, cv = kfold, refit = False, return_train_score=True, n_jobs=2)
+        
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
 
@@ -348,14 +350,24 @@ class predict_BC_lib():
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
             error_train = best["mean_train_score"]
             error_validation = best["mean_test_score"]
-
-            best_hidden_layer_sizes = best['param_model__hidden_layer_sizes']
-            best_activation = best['param_model__activation']
-            best_solver = best['param_model__solver']
-            best_alpha = best['param_model__alpha']
-            best_learning_rate = best['param_model__learning_rate']
+            if std_all_training == False:
+                best_hidden_layer_sizes = best['param_model__hidden_layer_sizes']
+                best_activation = best['param_model__activation']
+                best_solver = best['param_model__solver']
+                best_alpha = best['param_model__alpha']
+                best_learning_rate = best['param_model__learning_rate']
+            else:
+                best_hidden_layer_sizes = best['param_hidden_layer_sizes']
+                best_activation = best['param_activation']
+                best_solver = best['param_solver']
+                best_alpha = best['param_alpha']
+                best_learning_rate = best['param_learning_rate']
 
             mlp_estimator = MLPRegressor(hidden_layer_sizes = best_hidden_layer_sizes, activation = best_activation, solver = best_solver, alpha = best_alpha, learning_rate = best_learning_rate)
+            if std_all_training == False:
+                scaler = preprocessing.StandardScaler()
+                X = scaler.fit_transform(X)
             mlp_estimator.fit(X, np.ravel(Y))
             data_predict_train = mlp_estimator.predict(X)
+
             return mlp_estimator, [best_hidden_layer_sizes, best_activation, best_solver, best_alpha, best_learning_rate], data_predict_train, -error_train, -error_validation
