@@ -51,6 +51,14 @@ class predict_BC_lib():
         df = df.drop('RH_new', axis = 1)
         return df
 
+    def concat_SR(self, df, sr):
+        df['date'] = pd.to_datetime(df['date'], format='%d-%m-%Y')
+        sr['date'] = sr['date'].str.strip()
+        sr['date'] = pd.to_datetime(sr['date'], format='%d/%m/%Y')
+        df = df.merge(sr, on='date') 
+        df['SR'] = pd.to_numeric(df['SR'], errors='coerce')
+        return df
+
     def remove_nan_columns(self, df, RH_included): 
         #1 Remove columns
         columns_to_remove = ["WD", "WS", "Temp", "RF"]
@@ -92,7 +100,7 @@ class predict_BC_lib():
         rh = rh.rename(columns={'RH': 'RH_new'})
         df = df.merge(rh, on='date') 
         df['RH_new'] = df['RH_new'].replace('None', np.nan).astype(float)
-        df = df.groupby(pd.Grouper(key='date', axis=0, freq='d')).mean()
+        #df = df.groupby(pd.Grouper(key='date', axis=0, freq='d')).mean()
         df = df.reset_index()
         fig, ax = plt.subplots()
 
@@ -183,14 +191,15 @@ class predict_BC_lib():
         self.one_year_plot(df, 2018, 1, 2018, 11, ax1)
         self.one_year_plot(df, 2018, 12, 2019, 11, ax2)
         plt.tight_layout()
-        if save_images == True:
+        plt.show()
+        """if save_images == True:
             if RH_included == True:
                 if RH_imputed == True: 
                     fig.savefig('../img/seasons_split/BC_seasons_RH_imputed.png')
                 elif RH_imputed == False: 
                     fig.savefig('../img/seasons_split/BC_seasons_RH_included_nan_dropped.png')
             elif RH_included == False:
-                fig.savefig('../img/seasons_split/BC_seasons_RH_excluded.png')
+                fig.savefig('../img/seasons_split/BC_seasons_RH_excluded.png')"""
 
     def train_RF(self, X, Y, scoring, best_params, std_all_training):   
         alpha = predict_BC_lib.per * (Y.quantile(0.9))
