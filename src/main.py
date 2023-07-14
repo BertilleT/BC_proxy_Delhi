@@ -11,7 +11,7 @@ SR_path = '../data/Solar radiation data_Agra 2017-2020.csv'
 method = 'NN' 
 RH_included = True
 SR_included = True
-RH_imputed = True
+RH_imputed = False
 tune_hyperparameters = True #True if we want to tune again the hyper parameters. False if we eant to use the ones already found. 
 save_images = True
 scoring = 'neg_root_mean_squared_error'
@@ -62,7 +62,7 @@ if RH_imputed == True:
 if SR_included == True:
     sr = pd.read_csv(SR_path)
     df = lib.concat_SR(df, sr)
-
+lib.print_nan_per(df)
 df = lib.remove_nan_columns(df, RH_included)
 df = lib.remove_nan_rows(df)
 df, datetime_df = lib.concat_date_time(df)
