@@ -14,7 +14,7 @@ pd.options.mode.chained_assignment = None
 
 lib = predict_BC_lib()
 
-def train_test_ML(df, method, scoring, season, best_parameters, std_all_training):
+def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
     #---------------------------------------------------------------------------------------------------------------------#
     ## Pre-processing
     metrics = {}
