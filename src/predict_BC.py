@@ -1,5 +1,15 @@
+"""
+
+Author: Bertille Temple
+Last update: August 22, 2023
+Research group: Statistical Analysis of Networks and Systems SANS
+Department: Computers Architecture Department DAC
+Institution: Polytechnic University of Catalonia UPC
+
+"""
+
 import pandas as pd
-from predict_BC_class import predict_BC_lib
+from tune_trainer import Tune_trainer
 import numpy as np
 import time
 from sklearn import preprocessing
@@ -12,7 +22,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.datasets import make_regression
 pd.options.mode.chained_assignment = None
 
-lib = predict_BC_lib()
+lib = Tune_trainer()
 
 def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
     #---------------------------------------------------------------------------------------------------------------------#
@@ -24,7 +34,7 @@ def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
     print("95% of the BC values of the set under study are between " + str(df["BC"].min().round()) + " and " + str(df["BC"].quantile(0.95).round()))
     print("The mean is: " +  str(df["BC"].mean().round()))
 
-    #the index is usefull to recover temporality and draw plots, so let us store it. 
+    #the index is useful to recover temporality and draw plots, so let us store it. 
     df['index'] = df.index
     X = df.drop("BC", axis = 1)
     y = df[["index", "BC"]]
@@ -48,6 +58,7 @@ def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
 
     #---------------------------------------------------------------------------------------------------------------------#
     ## Training
+    #start a timer
     st = time.time()
     if method == 'SVR':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_SVR(X_train, y_train, scoring, best_parameters[season], std_all_training)
@@ -55,8 +66,11 @@ def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_RF(X_train, y_train, scoring, best_parameters[season], std_all_training)
     elif method == 'NN':
         model, best_parameters, train_predicted_Y, error_train, error_validation = lib.train_NN(X_train, y_train, scoring, best_parameters[season], std_all_training)
+    
+    #end the timer
     et = time.time()
     elapsed_time = (et - st) / 60
+
     if (model, best_parameters, train_predicted_Y, error_train, error_validation) == (0, 0, 0, 0, 0):
         return 'Fail in the training. Change the hyper parameters, or increase the value of alpha.'
     
@@ -70,25 +84,18 @@ def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
 
     if method == 'SVR':
         model = SVR(C = best_parameters[0], gamma = best_parameters[1], epsilon = best_parameters[2])
-        model.fit(X_test, np.ravel(y_test))
-        predicted_y_test = model.predict(X_test)    
     elif method == 'RF':
-        model = RandomForestRegressor(n_estimators = best_parameters[0], max_features = best_parameters[1], max_depth = best_parameters[2])
-        model.fit(X_test, np.ravel(y_test))
-        predicted_y_test = model.predict(X_test)   
+        model = RandomForestRegressor(n_estimators = best_parameters[0], max_features = best_parameters[1], max_depth = best_parameters[2])   
     elif method == 'NN':
         model = MLPRegressor(hidden_layer_sizes = best_parameters[0], activation = best_parameters[1], solver = best_parameters[2], alpha = best_parameters[3], learning_rate = best_parameters[4])
-        model.fit(X_test, np.ravel(y_test))
-        predicted_y_test = model.predict(X_test)     
 
+    model.fit(X_test, np.ravel(y_test))
+    predicted_y_test = model.predict(X_test)
     if scoring == 'neg_root_mean_squared_error':
-        #error_test = np.sqrt(mean_squared_error(y_test, predicted_y_test))
         error_test = np.sqrt(mean_squared_error(y_test, predicted_y_test))
     elif scoring == 'neg_mean_squared_error':
-        #error_test = mean_squared_error(y_test, predicted_y_test)
         error_test = mean_squared_error(y_test, predicted_y_test)
     elif scoring == 'neg_mean_absolute_error':
-        #error_test = mean_absolute_error(y_test, predicted_y_test)
         error_test = mean_absolute_error(y_test, predicted_y_test)
     
     
@@ -99,7 +106,6 @@ def predict_BC(df, method, scoring, season, best_parameters, std_all_training):
     metrics['best_parameters'] = best_parameters
     metrics['error_train'] = round(error_train,2)
     metrics['error_validation'] = round(error_validation, 2)
-    #metrics['error_test'] = round(error_test, 2)
     metrics['error_test'] = round(error_test, 2)
     metrics['R2_train'] = round(R2_train, 2)
     metrics['R2_test'] = round(R2_test, 2)

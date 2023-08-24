@@ -1,3 +1,13 @@
+"""
+
+Author: Bertille Temple
+Last update: August 22, 2023
+Research group: Statistical Analysis of Networks and Systems SANS
+Department: Computers Architecture Department DAC
+Institution: Polytechnic University of Catalonia UPC
+
+"""
+
 import numpy as np
 import pandas as pd 
 import datetime
@@ -14,7 +24,7 @@ import sys
 import os
 
 class Tune_trainer():
-    #per is the percentage of difference between training and validation scores we are willing to accept
+    # Per is the percentage of difference between training and validation scores we are willing to accept
     per = 0.06
     no_param_found = "In cv, we could not find hyper parameters for which the difference between error validation and error training is inferior to alpha = "
     
@@ -23,8 +33,9 @@ class Tune_trainer():
         warnings.simplefilter("ignore")
         os.environ["PYTHONWARNINGS"] = "ignore" # Also affect subprocesses
 
+    # Train the Random Forest model
     def train_RF(self, X, Y, scoring, best_params, std_all_training):   
-        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = Tune_trainer.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
 
@@ -51,12 +62,12 @@ class Tune_trainer():
         
         search.fit(X, np.ravel(Y))
         cv_scores_df = pd.DataFrame.from_dict(search.cv_results_)
-       
+        #the difference between the training and the validation score should not exceed a certain value, called alpha. This line was introduced to reduce the overfitting. 
         cv_scores_df["keep"] = cv_scores_df.apply(lambda x: 1 if np.absolute(x.mean_train_score - x.mean_test_score) < alpha else 0, axis = 1) 
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]    
         
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(alpha))
+            print(Tune_trainer.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
@@ -80,8 +91,9 @@ class Tune_trainer():
 
             return rf_estimator, [best_n, best_features, best_depth], data_predict_train, -error_train, -error_validation
 
+    # Train the Support Vector Regression model
     def train_SVR(self, X, Y, scoring, best_params, std_all_training):
-        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = Tune_trainer.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
 
@@ -114,7 +126,7 @@ class Tune_trainer():
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]
 
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(alpha))
+            print(Tune_trainer.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]
@@ -138,8 +150,9 @@ class Tune_trainer():
             
             return svr_estimator, [best_c, best_gamma, best_eps], data_predict_train, -error_train, -error_validation
     
+    # Train the Neural Networks model, which is a Multi Layer Perceptron
     def train_NN(self, X, Y, scoring, best_params, std_all_training): 
-        alpha = predict_BC_lib.per * (Y.quantile(0.9))
+        alpha = Tune_trainer.per * (Y.quantile(0.9))
         alpha = alpha.item()
         kfold = 10
 
@@ -175,7 +188,7 @@ class Tune_trainer():
         cv_scores_df = cv_scores_df.loc[cv_scores_df['keep'] == 1]   
 
         if len(cv_scores_df.index) == 0:
-            print(predict_BC_lib.no_param_found + str(alpha))
+            print(Tune_trainer.no_param_found + str(alpha))
             return 0, 0, 0, 0, 0
         else: 
             best = cv_scores_df.loc[cv_scores_df["mean_test_score"].idxmax()]

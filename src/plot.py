@@ -1,9 +1,20 @@
+"""
+
+Author: Bertille Temple
+Last update: August 22, 2023
+Research group: Statistical Analysis of Networks and Systems SANS
+Department: Computers Architecture Department DAC
+Institution: Polytechnic University of Catalonia UPC
+
+"""
+
 import numpy as np
 import pandas as pd 
 import matplotlib.pyplot as plt
 import datetime
 
 class Plot():
+    # Plot the Relative Humidity from the original df and the new measures of Relative Humidity
     def RH(self, df, rh):
         rh['From Date'] = pd.to_datetime(rh['From Date'], format='%d-%m-%Y %H:%M')
         rh['date'] = rh['From Date'].dt.date
@@ -23,7 +34,7 @@ class Plot():
         ax.legend()
         plt.show()
     
-    ##plot true values and prediction according to time
+    # Plot true values and prediction according to time
     def trueANDpred_time(self, Y_true, Y_prediction, datetime, method, season, save_images):
         #merge datetime_df and unscaled_test_Y based on the index. 
         Y_true = pd.DataFrame(Y_true).join(datetime)
@@ -53,7 +64,7 @@ class Plot():
         if save_images == True:
             fig.savefig('../img/' + method + '/predictedANDtrue_'+ method +'_' + season + '.png')
 
-    ##plot scatter of true values against prediction 
+    # Plot scatter of true values against prediction 
     def trueVSpred_scatter(self, Y_true, Y_prediction, method, season, save_images):
         fig, ax = plt.subplots(figsize=(9,9))
         ax.scatter(Y_true.values, Y_prediction.values)
@@ -96,7 +107,7 @@ class Plot():
         ax.set_ylabel('BlackCarbon in µg/m3')
         ax.set_title(f'{start_date:%b %Y} - {end_date:%b %Y}')
         
-
+    # Plot the data from df splitted by season
     def season_split(self, df, RH_included, RH_imputed):
         fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 12))
         plt.sca(ax1)
