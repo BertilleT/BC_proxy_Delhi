@@ -13,16 +13,12 @@ This project was made to predict Black Carbon(BC) concentration in Delhi. It is 
 * ``data`` folder contains the BC and the Relative Humidity(RH) data from Delhi, and the Solar Radiation(SR) data from Agra, 
 * ``img`` folder contains images of seasons splitting, true and predicted values among time, true VS predicted values, 
 * ``src`` folder contains all the scripts: 
-    * main.py is the main script. It has 2 parts: first, predictions are made on the whole dataset, then predictions are made by season. To pre_process and post_process the data (feature selection, season splitting), main calls methods from the Pre_post_process class. 
-    * parameters.py contains the parameters to be selected before running the main script, 
-    * plot.py contains a class with methods to plot the data, 
-    * pre_post_process.py contains a class with all methods to pre and post-process the data. For example, it contains the function impute_RH() to impute Relative Humidity feature when there are missing values,
+    * main.py is the main script. It has 2 parts: first, predictions are made on the whole dataset, then predictions are made by season. To pre_process and post_process the data (feature selection, season splitting), main;py calls methods from the Pre_post_process class. Once the data ready, main.py calls the function predict_BC to predict Black Carbon. 
+    * parameters.py contains the parameters to be selected before running the main script.
+    * plot.py contains a class with methods to plot the data and the predictions.
+    * pre_post_process.py contains a class with all methods to pre and post-process the data. For example, it contains the function impute_RH() to impute Relative Humidity feature when there are missing values.
     * predict_BC.py contains one function aimed at training and testing a specific ML algorithm to predict BC. This function is called from main.py and outputs scores to evaluate the quality of the predictions made for the training, validation and testing set. 
-    * tune_trainer.py contains one class with functions to tune the hyper-parameters and train the model. The model can be trained with one of the 3 algorithms : RF, SVR or NN MLP. This class is instanciated in predict_BC.py
-
-
-    * predict_BC_class.py contains a big class with all useful functions. These functions are called from main.py. 
-    * predict_BC.py contains one function aimed at training and testing a specific ML algorithm to predict BC. This function is called from main.py. 
+    * tune_trainer.py contains one class with functions to tune the hyper-parameters and train the model. The model can be trained with one of the 3 algorithms : RF, SVR or NN MLP. This class is instantiated in predict_BC.py.
 
 
 # Step by step
